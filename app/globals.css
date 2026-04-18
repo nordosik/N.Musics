@@ -23,4 +23,47 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+h1, h2 {
+  letter-spacing: -0.04em;
+}
+
+/* В globals.css */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* Скроем стандартный уродливый скроллбар в модалке */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.1);
+  border-radius: 10px;
+}
+
+/* Прячем скроллбар для всех браузеров, сохраняя прокрутку */
+@layer base {
+  /* Для Chrome, Safari и Opera */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Для Firefox и IE/Edge */
+  html, body {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+  }
+
+  /* Для всех элементов со скроллом (наша форма, списки и т.д.) */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  
+  *::-webkit-scrollbar {
+    display: none;
+  }
 }
