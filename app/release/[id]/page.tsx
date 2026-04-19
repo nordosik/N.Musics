@@ -50,17 +50,19 @@ export default function ReleasePage() {
       <div className="flex flex-col lg:flex-row min-h-screen w-full relative">
 
         {/* ЛЕВАЯ КОЛОНКА: ОБЛОЖКА И ИНФО */}
-        <div className="w-full lg:w-[400px] lg:fixed lg:h-screen p-12 md:items-start md:sticky md:top-24">
+        <div className="w-full lg:w-[400px] lg:fixed lg:top-0 lg:left-0 lg:bottom-0 p-12 flex flex-col justify-start z-20 bg-[#050505] md:bg-transparent">
 
-          {/* ОБЛОЖКА: ТЕПЕРЬ ОНА МАЛЕНЬКАЯ (w-64 h-64) */}
-          <div className="w-64 h-64 overflow-hidden mb-8 shadow-2xl">
+          {/* ОБЛОЖКА: Оставили w-64 h-64, но добавили mt-4 чтобы чуть выше была */}
+          <div className="w-64 h-64 overflow-hidden mb-8 shadow-2xl shrink-0 mt-4">
             <img src={release.cover_url} className="w-full h-full object-cover" alt="" />
           </div>
 
           <div className="w-full text-center md:text-left">
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-800 mb-3 block">
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-3 block">
               {release.is_album ? 'Album' : 'Single'}
             </span>
+
+            {/* Твой H1 с динамическим размером (вставь сюда свою формулу стиля, если она была) */}
             <h1 className="text-4xl font-black tracking-tighter uppercase leading-none mb-4">
               {release.title}
             </h1>
@@ -69,28 +71,32 @@ export default function ReleasePage() {
             <div className="flex items-center justify-center md:justify-start gap-6 mt-6">
               <button
                 onClick={() => { if (isCurrentPlaying) setIsPlaying(false); else { setQueue(tracks, 0); setIsPlaying(true); } }}
-                className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all"
+                className="w-14 h-14 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"
               >
                 {isCurrentPlaying ? <Pause size={24} fill="black" /> : <Play size={24} fill="black" className="ml-1" />}
               </button>
+
               <button
                 onClick={togglePlayer}
                 className={`p-2 rounded-full border transition-all ${playerHidden ? 'bg-white text-black border-white' : 'bg-transparent text-zinc-500 border-white/10 hover:text-white'}`}
                 title={playerHidden ? "Show Player" : "Hide Player"}
               >
-                {/* Иконка глаза или плеера */}
                 {playerHidden ? <Music size={18} /> : <X size={18} />}
               </button>
-              <button onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="text-zinc-700 hover:text-white transition-colors">
-                <Share2 size={24} />
+
+              <button
+                onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                {copied ? <div className="text-[10px] font-bold">COPIED!</div> : <Share2 size={24} />}
               </button>
             </div>
           </div>
         </div>
 
         {/* ПРАВАЯ КОЛОНКА: ТРЕКЛИСТ */}
-        <div className="flex-1 lg:ml-[400px] p-8 md:p-20 !pb-[500px]">
-          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-white/10 mb-6">
+        <div className="flex-1 lg:ml-[400px] p-8 md:p-20 !pb-32 overflow-y-auto h-full custom-scrollbar">
+          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-white/10 mb-6 sticky top-0 bg-[#050505] z-10">
             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-500">Tracklist</span>
             <Clock size={14} className="text-zinc-500" />
           </div>
@@ -110,7 +116,8 @@ export default function ReleasePage() {
                     <span className={`text-[12px] font-black w-6 ${isCurrent ? 'text-white' : 'text-zinc-800'}`}>
                       {i + 1}
                     </span>
-                    <span className={`text-sm font-black uppercase tracking-tighter ${isCurrent ? 'text-white' : 'text-zinc-500 group-hover:text-white'}`}>
+                    <span className={`text-sm font-black uppercase tracking-tighter ${isCurrent ? 'text-white' : 'text-zinc-500 group-hover:text-white'
+                      }`}>
                       {track.title}
                     </span>
                   </div>
@@ -122,8 +129,8 @@ export default function ReleasePage() {
             })}
           </div>
 
-          {/* ЗАГЛУШКА ЧТОБЫ ПЛЕЕР НЕ ПЕРЕКРЫВАЛ */}
-          <div className="h-[400px] w-full" />
+          {/* Маленький отступ в конце, чтобы последний трек не был впритык к плееру */}
+          <div className="h-10 w-full" />
         </div>
       </div>
     </main>

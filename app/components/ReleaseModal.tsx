@@ -35,16 +35,16 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/90 backdrop-blur-xl" />
 
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.98 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            exit={{ opacity: 0, scale: 0.98 }} 
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
             className="relative w-full max-w-3xl max-h-[85vh] bg-[#121212] border border-white/5 rounded-xl overflow-hidden flex flex-col shadow-2xl"
           >
             {/* 1. ПОЛНОЭКРАННАЯ ОБЛОЖКА (PREVIEW) */}
             <AnimatePresence>
               {isCoverExpanded && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -54,7 +54,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
                   <button className="absolute top-6 right-6 p-2 bg-white/10 rounded-full text-white">
                     <X size={24} />
                   </button>
-                  <motion.img 
+                  <motion.img
                     initial={{ scale: 0.8 }}
                     animate={{ scale: 1 }}
                     exit={{ scale: 0.8 }}
@@ -72,9 +72,9 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
             <div className="overflow-y-auto custom-scrollbar">
               {/* HEADER */}
               <div className="p-10 flex flex-col sm:flex-row gap-8 items-center sm:items-end bg-gradient-to-b from-white/[0.03] to-transparent">
-                
+
                 {/* ТРИГГЕР ОБЛОЖКИ */}
-                <div 
+                <div
                   onClick={() => setIsCoverExpanded(true)}
                   className="w-44 h-44 md:w-52 md:h-52 shadow-2xl rounded-sm overflow-hidden bg-zinc-900 flex-shrink-0 cursor-zoom-in group/cover relative"
                 >
@@ -88,12 +88,15 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
                   <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-0">
                     {release.is_album ? 'Album' : 'Single'}
                   </span>
-  
-                  <h1 className={`font-black tracking-tighter text-white uppercase leading-[1.1] mb-3 ${
-                    release.title.length > 20 ? 'text-xl md:text-3xl' : 
-                    release.title.length > 12 ? 'text-2xl md:text-4xl' : 
-                      'text-4xl md:text-6xl'
-                  }`}>
+
+                  <h1
+                    className="font-black tracking-tighter text-white uppercase leading-[0.9] mb-3 break-words"
+                    style={{
+                      fontSize: release.title.length > 8
+                        ? `clamp(20px, ${60 - (release.title.length - 8) * 4}px, 60px)`
+                        : '60px',
+                    }}
+                  >
                     {release.title}
                   </h1>
 
@@ -109,7 +112,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
 
                   {/* КНОПКА ТЕПЕРЬ ОТДЕЛЬНО И ВЫГЛЯДИТ ПИЗДАТО */}
                   <div className="flex items-center justify-center sm:justify-start gap-4">
-                    <button 
+                    <button
                       onClick={handleShare}
                       className="group flex items-center gap-2 px-5 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all border border-white/10 hover:border-white/20 active:scale-95"
                     >
@@ -123,12 +126,12 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
               {/* CONTROLS & TRACKS */}
               <div className="px-10 pb-10">
                 <div className="mb-8">
-                  <button 
+                  <button
                     onClick={() => isThisReleasePlaying ? togglePlay() : setQueue(tracks, 0)}
                     className="w-14 h-14 bg-white hover:scale-105 transition active:scale-95 rounded-full flex items-center justify-center shadow-xl"
                   >
-                    {isThisReleasePlaying 
-                      ? <Pause fill="black" className="text-black" size={24} /> 
+                    {isThisReleasePlaying
+                      ? <Pause fill="black" className="text-black" size={24} />
                       : <Play fill="black" className="text-black ml-1" size={24} />
                     }
                   </button>
@@ -139,14 +142,13 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
                     const isCurrentTrack = activeTrack?.id === track.id;
                     const isNowPlaying = isCurrentTrack && isPlaying;
                     return (
-                      <div 
+                      <div
                         key={track.id}
                         onClick={() => setQueue(tracks, i)}
-                        className={`grid grid-cols-[30px_1fr_60px] gap-4 p-3 rounded-lg cursor-pointer items-center transition-all duration-500 group ${
-                          isNowPlaying 
-                            ? 'bg-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/10' 
-                            : 'hover:bg-white/5 border border-transparent'
-                        }`}
+                        className={`grid grid-cols-[30px_1fr_60px] gap-4 p-3 rounded-lg cursor-pointer items-center transition-all duration-500 group ${isNowPlaying
+                          ? 'bg-white/10 shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/10'
+                          : 'hover:bg-white/5 border border-transparent'
+                          }`}
                       >
                         <span className="flex items-center justify-center text-sm font-medium">
                           {isNowPlaying ? (
