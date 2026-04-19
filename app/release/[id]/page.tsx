@@ -95,42 +95,48 @@ export default function ReleasePage() {
         </div>
 
         {/* ПРАВАЯ КОЛОНКА: ТРЕКЛИСТ */}
-        <div className="flex-1 lg:ml-[400px] p-8 md:p-20 !pb-32 overflow-y-auto h-full custom-scrollbar">
-          <div className="flex items-center justify-between px-4 py-3 border-b-2 border-white/10 mb-6 sticky top-0 bg-[#050505] z-10">
+        <div className="flex-1 lg:ml-[400px] h-full flex flex-col p-8 md:p-20 overflow-hidden">
+
+          {/* Заголовок треклиста — теперь он всегда на месте */}
+          <div className="w-full max-w-2xl mx-auto flex items-center justify-between px-4 py-3 border-b-2 border-white/10 mb-6 shrink-0">
             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-500">Tracklist</span>
             <Clock size={14} className="text-zinc-500" />
           </div>
 
-          {/* ТУТ ТВОЙ MAP С ТРЕКАМИ */}
-          <div className="flex flex-col">
-            {tracks.map((track, i) => {
-              const isCurrent = activeTrack?.id === track.id;
-              return (
-                <div
-                  key={track.id}
-                  onClick={() => { setQueue(tracks, i); setIsPlaying(true); }}
-                  className={`group flex items-center justify-between p-4 border-b border-white/[0.03] cursor-pointer transition-all ${isCurrent ? 'bg-white/5' : 'hover:bg-white/[0.02]'
-                    }`}
-                >
-                  <div className="flex items-center gap-6">
-                    <span className={`text-[12px] font-black w-6 ${isCurrent ? 'text-white' : 'text-zinc-800'}`}>
-                      {i + 1}
-                    </span>
-                    <span className={`text-sm font-black uppercase tracking-tighter ${isCurrent ? 'text-white' : 'text-zinc-500 group-hover:text-white'
-                      }`}>
-                      {track.title}
-                    </span>
-                  </div>
-                  <span className={`text-[10px] font-mono ${isCurrent ? 'text-white' : 'text-zinc-700'}`}>
-                    {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}
-                  </span>
-                </div>
-              )
-            })}
+          {/* КОНТЕЙНЕР ДЛЯ ТРЕКОВ: Центрирует содержимое, если его мало */}
+          <div className="flex-1 flex flex-col justify-center min-h-0">
+            <div className="overflow-y-auto max-h-full pr-2 custom-scrollbar w-full max-w-2xl mx-auto">
+              <div className="flex flex-col">
+                {tracks.map((track, i) => {
+                  const isCurrent = activeTrack?.id === track.id;
+                  return (
+                    <div
+                      key={track.id}
+                      onClick={() => { setQueue(tracks, i); setIsPlaying(true); }}
+                      className={`group flex items-center justify-between p-4 border-b border-white/[0.03] cursor-pointer transition-all ${isCurrent ? 'bg-white/5' : 'hover:bg-white/[0.02]'
+                        }`}
+                    >
+                      <div className="flex items-center gap-6">
+                        <span className={`text-[12px] font-black w-6 ${isCurrent ? 'text-white' : 'text-zinc-800'}`}>
+                          {i + 1}
+                        </span>
+                        <span className={`text-sm font-black uppercase tracking-tighter ${isCurrent ? 'text-white' : 'text-zinc-500 group-hover:text-white'
+                          }`}>
+                          {track.title}
+                        </span>
+                      </div>
+                      <span className={`text-[10px] font-mono ${isCurrent ? 'text-white' : 'text-zinc-700'}`}>
+                        {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Маленький отступ в конце, чтобы последний трек не был впритык к плееру */}
-          <div className="h-10 w-full" />
+          {/* Нижняя заглушка теперь минимальна, просто чтобы не липло к краю */}
+          <div className="h-10 shrink-0" />
         </div>
       </div>
     </main>
