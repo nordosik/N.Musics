@@ -84,13 +84,13 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1 text-center sm:text-left flex-1 min-w-0">
-                  <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-0">
+                <div className="flex flex-col gap-0 text-center sm:text-left flex-1 min-w-0">
+                  <span className="text-[12px] font-bold uppercase tracking-[0.3em] text-zinc-500 mb-1">
                     {release.is_album ? 'Album' : 'Single'}
                   </span>
 
                   <h1
-                    className="font-black tracking-tighter text-white uppercase leading-[0.9] mb-3 break-words"
+                    className="font-black tracking-tighter text-white uppercase leading-[0.9] mb-2 break-words"
                     style={{
                       fontSize: release.title.length > 8
                         ? `clamp(20px, ${60 - (release.title.length - 8) * 4}px, 60px)`
