@@ -170,7 +170,7 @@ function HomeContent() {
             </div>
           </div>
           <div className="w-1/3 flex justify-end text-zinc-400">
-            <div className="text-xs uppercase tracking-widest font-bold">N.Music Player</div>
+            <div className="text-xs uppercase tracking-widest font-bold">N.Musics Player</div>
           </div>
         </div>
       </main>

@@ -8,6 +8,7 @@ interface Track {
   cover_url?: string;
   is_album?: boolean;
   release_id?: string;
+  duration: number;
 }
 interface PlayerStore {
   activeTrack: Track | null

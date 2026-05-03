@@ -3,17 +3,19 @@ import { useState } from 'react' // Добавили стейт
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, Pause, X, Maximize2 } from 'lucide-react'
 import { usePlayer } from '../lib/usePlayer'
-import { Share2 } from 'lucide-react'
+import { Share2, Download } from 'lucide-react'
+import DownloadButton from "./DownloadButton";
 
 export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) {
   const { setQueue, activeTrack, isPlaying, togglePlay } = usePlayer()
   const [isCoverExpanded, setIsCoverExpanded] = useState(false) // Стейт для обложки
   const [copied, setCopied] = useState(false);
+  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
 
   if (!release) return null;
 
   const formatDuration = (s: any) => {
-    const seconds = parseInt(s);
+    const seconds = Math.floor(Number(s));
     if (isNaN(seconds) || seconds <= 0) return '--:--';
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
@@ -65,9 +67,14 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
               )}
             </AnimatePresence>
 
-            <button onClick={onClose} className="absolute top-6 right-6 z-50 p-2 hover:bg-white/10 rounded-full transition text-zinc-500">
-              <X size={20} />
-            </button>
+            {!isDownloadOpen && (
+              <button
+                onClick={onClose}
+                className="absolute top-6 right-6 z-50 p-2 hover:bg-white/10 rounded-full transition text-zinc-500"
+              >
+                <X size={20} />
+              </button>
+            )}
 
             <div className="overflow-y-auto custom-scrollbar">
               {/* HEADER */}
@@ -110,15 +117,134 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks }: any) 
                     </span>
                   </div>
 
-                  {/* КНОПКА ТЕПЕРЬ ОТДЕЛЬНО И ВЫГЛЯДИТ ПИЗДАТО */}
-                  <div className="flex items-center justify-center sm:justify-start gap-4">
+                  {/* КНОПКИ ТЕПЕРЬ В РЯД И ВЫГЛЯДЯТ ПИЗДАТО */}
+                  <div className="flex items-center justify-center sm:justify-start gap-3 mb-6">
+
+                    {/* 1. SHARE RELEASE */}
                     <button
                       onClick={handleShare}
                       className="group flex items-center gap-2 px-5 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all border border-white/10 hover:border-white/20 active:scale-95"
                     >
                       <Share2 size={16} className="text-zinc-400 group-hover:text-white transition-colors" />
-                      <span className="text-[12px] font-black uppercase tracking-widest">{copied ? 'Copied!' : 'Share Release'}</span>
+                      <span className="text-[12px] font-black uppercase tracking-widest">
+                        {copied ? 'Copied!' : 'Share Release'}
+                      </span>
                     </button>
+
+                    {/* 2. DOWNLOAD MANAGER (Сингл или Список для альбома) */}
+                    <div className="relative">
+                      {release.is_album ? (
+                        // Кнопка-триггер для открытия списка в альбоме
+                        <button
+                          onClick={() => setIsDownloadOpen(!isDownloadOpen)}
+                          className="group flex items-center gap-2 px-5 py-2 bg-white/5 hover:bg-white/10 text-white rounded-full transition-all border border-white/10 hover:border-white/20 active:scale-95"
+                        >
+                          <Download size={16} className="text-zinc-400 group-hover:text-white transition-colors" />
+                          <span className="text-[12px] font-black uppercase tracking-widest">
+                            {isDownloadOpen ? 'Close' : 'Get Tracks'}
+                          </span>
+                        </button>
+                      ) : (
+                        // Обычная кнопка скачивания для сингла
+                        <DownloadButton
+                          url={release.audio_url}
+                          fileName={release.title}
+                        />
+                      )}
+
+                      {/* ВЫПАДАЮЩИЙ СПИСОК ТРЕКОВ ДЛЯ АЛЬБОМА (MANAGER) */}
+                      <AnimatePresence>
+                        {isDownloadOpen && release.is_album && (
+                          /* Портал поверх всего сайта */
+                          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+
+                            {/* ФОН С БЛЮРОМ (Теперь он точно заблюрит всё сзади) */}
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              onClick={() => setIsDownloadOpen(false)}
+                              className="absolute inset-0 bg-black/80 backdrop-blur-2xl"
+                            />
+
+                            {/* КОНТЕЙНЕР МЕНЕДЖЕРА */}
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              // Форсируем округление через inline-style и !important классы
+                              className="relative w-full max-w-md bg-[#121212] border border-white/10 shadow-[0_0_100px_rgba(0,0,0,1)] flex flex-col !rounded-[40px] overflow-hidden"
+                              style={{
+                                maxHeight: '75vh',
+                                borderRadius: '40px' // Прямое указание радиуса
+                              }}
+                            >
+
+                              {/* ХЕДЕР (Увеличил отступы, чтобы текст не слипался) */}
+                              <div className="flex flex-col items-center justify-center px-10 pt-14 pb-8 border-b border-white/5 bg-[#161616] relative">
+
+                                {/* КНОПКА ЗАКРЫТИЯ (Теперь она выше и правее) */}
+                                <button
+                                  onClick={() => setIsDownloadOpen(false)}
+                                  className="absolute top-6 right-6 flex items-center justify-center w-9 h-9 bg-white text-black rounded-full hover:scale-110 transition-all active:scale-90 shadow-2xl z-[10000]"
+                                >
+                                  <X size={18} strokeWidth={3} />
+                                </button>
+
+                                <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] mb-2 opacity-50">
+                                  Download Manager
+                                </span>
+                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter text-center leading-none">
+                                  {release.title}
+                                </h2>
+                              </div>
+
+                              {/* СПИСОК ТРЕКОВ */}
+                              <div className="overflow-y-auto flex-1 px-3 py-6 bg-[#121212] custom-scrollbar">
+                                <div className="flex flex-col gap-y-1">
+                                  {tracks.map((track: any, i: number) => (
+                                    <div
+                                      key={track.id}
+                                      className="flex items-center justify-between p-4 px-6 rounded-[24px] hover:bg-white/[0.05] transition-all group mx-2"
+                                    >
+                                      <div className="flex items-center gap-x-6 min-w-0">
+                                        {/* w-8 чтобы цифры 10+ не двигали текст */}
+                                        <span className="text-[12px] font-black text-zinc-700 w-6 text-left group-hover:text-zinc-400">
+                                          {i + 1}
+                                        </span>
+                                        <div className="flex flex-col truncate">
+                                          <span className="font-bold text-[15px] text-zinc-200 group-hover:text-white truncate uppercase tracking-tight">
+                                            {track.title}
+                                          </span>
+                                          <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mt-0.5">
+                                            NORDOSIK
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex-shrink-0 opacity-40 group-hover:opacity-100 transition-opacity">
+                                        <DownloadButton
+                                          url={track.song_path || track.audio_url}
+                                          fileName={`${release.title} - ${track.title}`}
+                                          isMini
+                                        />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* ФУТЕР */}
+                              <div className="px-7 py-6 bg-[#161616] border-t border-white/5 flex justify-center">
+                                <span className="text-[10px] font-black text-zinc-800 uppercase tracking-[0.6em]">
+                                  N.Musics Records
+                                </span>
+                              </div>
+                            </motion.div>
+                          </div>
+                        )}
+                      </AnimatePresence>
+                    </div>
                   </div>
                 </div>
               </div>

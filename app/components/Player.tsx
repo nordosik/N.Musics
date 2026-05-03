@@ -163,7 +163,7 @@ export default function Player() {
         </div>
         <div className="truncate">
           <div className="text-sm font-bold text-white truncate">{activeTrack?.title}</div>
-          <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Nordosik • N.Music</div>
+          <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Nordosik • N.Musics</div>
         </div>
       </div>
 
@@ -212,7 +212,12 @@ export default function Player() {
             />
           </div>
 
-          <span>{duration ? `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, '0')}` : '0:00'}</span>
+          <span>
+            {activeTrack?.duration
+              ? `${Math.floor(activeTrack.duration / 60)}:${Math.floor(activeTrack.duration % 60).toString().padStart(2, '0')}`
+              : '0:00'
+            }
+          </span>
         </div>
       </div>
 
