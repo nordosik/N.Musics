@@ -29,7 +29,7 @@ export default function Hero() {
             NORDOSIK
           </h1>
           <p className="text-zinc-500 font-medium text-lg mt-1">
-            N.Music <span className="mx-2 opacity-20">•</span> Personal Discography
+            N.Musics <span className="mx-2 opacity-20">•</span> Personal Discography
           </p>
         </motion.div>
       </div>
