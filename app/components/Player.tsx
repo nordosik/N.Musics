@@ -1,14 +1,26 @@
 'use client'
 import { usePlayer } from '../lib/usePlayer'
 import LyricsOverlay from './LyricsOverlay'
-import { Play, Pause, Volume2, Music, SkipBack, SkipForward, Quote } from 'lucide-react'
-import React, { useRef, useEffect, useState } from 'react' // ДОБАВИЛИ useState СЮДА
+import { Play, Pause, Volume2, Music, SkipBack, SkipForward, Quote, Shuffle, Repeat, Repeat1 } from 'lucide-react'
+import React, { useRef, useEffect, useState } from 'react'
 
 export default function Player() {
-  const { activeTrack, isPlaying, setIsPlaying, playNext, playPrevious, isLyricsOpen, setIsLyricsOpen } = usePlayer();
+  const { 
+    activeTrack, 
+    isPlaying, 
+    setIsPlaying, 
+    playNext, 
+    playPrevious, 
+    isLyricsOpen, 
+    setIsLyricsOpen,
+    isShuffle,
+    toggleShuffle,
+    repeatMode,
+    toggleRepeat
+  } = usePlayer();
+  
   const audioRef = useRef<HTMLAudioElement>(null)
 
-  // ПЕРЕНЕСЛИ ХУКИ ВНУТРЬ КОМПОНЕНТА
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(() => {
@@ -18,10 +30,16 @@ export default function Player() {
     return 1;
   });
 
+  // Синхронизация нативного свойства loop при изменении режима повтора
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.loop = (repeatMode === 'one');
+    }
+  }, [repeatMode]);
+
   // ЭФФЕКТ ГОРЯЧИХ КЛАВИШ
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Игнорируем, если пользователь что-то печатает в полях ввода
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       switch (e.code) {
@@ -51,7 +69,7 @@ export default function Player() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, setIsPlaying, volume]); // Зависимости важны для актуальных состояний
+  }, [isPlaying, setIsPlaying, volume]);
 
   // СИНХРОНИЗАЦИЯ ГРОМКОСТИ С ХРАНИЛИЩЕМ
   useEffect(() => {
@@ -61,7 +79,6 @@ export default function Player() {
     }
   }, [volume]);
 
-  // Функция обновления времени (нужна для ползунка)
   const onTimeUpdate = () => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime)
@@ -72,8 +89,10 @@ export default function Player() {
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
     setVolume(v);
-    localStorage.setItem('player_volume', v.toString()); // Сохраняем выбор пользователя
-    if (audioRef.current) audioRef.current.volume = v;
+    localStorage.setItem('player_volume', v.toString());
+    if (audioRef.current) {
+      audioRef.current.volume = v;
+    }
   };
 
   const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -89,8 +108,6 @@ export default function Player() {
   };
 
   useEffect(() => {
-    setCurrentTime(0);
-
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
@@ -104,32 +121,10 @@ export default function Player() {
     }
   }, [isPlaying, activeTrack, setIsPlaying, volume]);
 
-  const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
-
-  useEffect(() => {
-    const controlNavbar = () => {
-      if (typeof window !== 'undefined') {
-        // Если скроллим вниз — скрываем, если вверх — показываем
-        if (window.scrollY > lastScrollY && window.scrollY > 100) {
-          setIsVisible(false);
-        } else {
-          setIsVisible(true);
-        }
-        setLastScrollY(window.scrollY);
-      }
-    };
-
-    window.addEventListener('scroll', controlNavbar);
-    return () => window.removeEventListener('scroll', controlNavbar);
-  }, [lastScrollY]);
-
   const [isForcedHidden, setIsForcedHidden] = useState(false);
 
   useEffect(() => {
-    // Слушаем команду на скрытие/показ
     const handleToggle = (e: any) => setIsForcedHidden(e.detail);
-
     window.addEventListener('toggle-player', handleToggle);
     return () => window.removeEventListener('toggle-player', handleToggle);
   }, []);
@@ -141,7 +136,7 @@ export default function Player() {
       ${isForcedHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'} 
     `}>
 
-      {/* Добавили onTimeUpdate в тег audio, чтобы время реально обновлялось */}
+      {/* Нативный loop={repeatMode === 'one'} полностью решает проблему зависания и конфликтов с Shuffle */}
       <audio
         key={activeTrack?.id}
         ref={audioRef}
@@ -149,13 +144,14 @@ export default function Player() {
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onTimeUpdate}
         onCanPlay={(e) => e.currentTarget.volume = volume}
-        onEnded={() => playNext()}
+        onEnded={() => playNext(true)} 
         autoPlay={isPlaying}
+        loop={repeatMode === 'one'}
       />
 
       {/* 1. ИНФО */}
       <div className="flex items-center gap-4 w-1/3">
-        <div className="w-14 h-14 bg-zinc-800 rounded shadow-lg overflow-hidden flex items-center justify-center">
+        <div className="w-14 h-14 bg-zinc-800 rounded shadow-lg overflow-hidden flex items-center justify-center flex-shrink-0">
           {activeTrack?.cover_url ? (
             <img src={activeTrack.cover_url} className="w-full h-full object-cover" />
           ) : (
@@ -170,46 +166,82 @@ export default function Player() {
 
       {/* 2. УПРАВЛЕНИЕ И ПРОГРЕСС */}
       <div className="flex flex-col items-center gap-2 w-1/3">
-        {/* Кнопки управления */}
         <div className="flex items-center gap-6 text-zinc-400">
-          <SkipBack
-            onClick={() => usePlayer.getState().playPrevious()}
-            className="hover:text-white cursor-pointer transition"
-            size={24}
-          />
-
+          
+          {/* КНОПКА ПЕРЕМЕШИВАНИЯ */}
           <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="p-2 bg-white text-black rounded-full hover:scale-105 transition active:scale-95"
+            onClick={toggleShuffle}
+            className={`transition-all duration-200 hover:scale-105 active:scale-95 ${
+              isShuffle 
+                ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]' 
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+            title={isShuffle ? "Перемешивание включено" : "Перемешать всё"}
           >
-            {isPlaying ? <Pause fill="black" size={20} /> : <Play fill="black" size={20} />}
+            <Shuffle size={18} />
           </button>
 
-          <SkipForward
-            onClick={() => usePlayer.getState().playNext()}
-            className="hover:text-white cursor-pointer transition"
-            size={24}
+          {/* КНОПКА НАЗАД */}
+          <SkipBack
+            onClick={() => playPrevious()}
+            className="hover:text-white cursor-pointer transition active:scale-90"
+            size={22}
           />
+
+          {/* ЦЕНТРАЛЬНЫЙ ПЛЕЙ / ПАУЗА */}
+          <button
+            onClick={() => setIsPlaying(!isPlaying)}
+            className="p-2.5 bg-white text-black rounded-full hover:scale-105 transition active:scale-95 flex items-center justify-center"
+          >
+            {isPlaying ? <Pause fill="black" size={18} /> : <Play fill="black" size={18} className="ml-0.5" />}
+          </button>
+
+          {/* КНОПКА ВПЕРЕД */}
+          <SkipForward
+            onClick={() => playNext(false)} 
+            className="hover:text-white cursor-pointer transition active:scale-90"
+            size={22}
+          />
+
+          {/* КНОПКА ПОВТОРА */}
+          <button
+            onClick={toggleRepeat}
+            className="relative transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center w-8 h-8"
+            title={
+              repeatMode === 'one' ? "Повтор одного трека" :
+              repeatMode === 'all' ? "Повтор всего релиза" : "Повтор выключен"
+            }
+          >
+            <div className={`transition-colors ${
+              repeatMode !== 'off' 
+                ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]' 
+                : 'text-zinc-500 hover:text-zinc-300'
+            }`}>
+              {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
+            </div>
+
+            {repeatMode === 'all' && (
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full drop-shadow-[0_0_4px_rgba(255,255,255,0.6)]" />
+            )}
+          </button>
+
         </div>
 
         {/* Хотбар (Прогресс-бар) */}
-        <div className="flex items-center gap-2 w-full text-[10px] text-zinc-500 font-mono mt-1">
+        <div className="flex items-center gap-2 w-full text-[10px] text-zinc-500 font-mono mt-1 select-none">
           <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
 
-          {/* КЛИКАБЕЛЬНАЯ ОБЛАСТЬ */}
           <div
             onClick={handleProgressClick}
-            className="flex-1 h-1.5 bg-zinc-800 rounded-full relative cursor-pointer group overflow-hidden"
+            className="flex-1 h-1 bg-zinc-800 rounded-full relative cursor-pointer group"
           >
-            {/* Сама полоска */}
             <div
-              className="absolute h-full bg-zinc-400 group-hover:bg-white transition-all duration-100"
+              className="absolute h-full bg-zinc-400 group-hover:bg-white transition-all duration-100 rounded-full"
               style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
             />
-            {/* Ползунок (появляется при наведении) */}
             <div
-              className="absolute h-3 w-3 bg-white rounded-full -top-[3px] opacity-0 group-hover:opacity-100 transition-opacity shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-              style={{ left: `calc(${(currentTime / (duration || 1)) * 100}% - 6px)` }}
+              className="absolute h-2.5 w-2.5 bg-white rounded-full -top-[3px] opacity-0 group-hover:opacity-100 transition-opacity shadow-[0_0_8px_rgba(255,255,255,0.5)]"
+              style={{ left: `calc(${(currentTime / (duration || 1)) * 100}% - 5px)` }}
             />
           </div>
 
@@ -224,7 +256,6 @@ export default function Player() {
 
       {/* 3. ГРОМКОСТЬ + КНОПКА ТЕКСТА */}
       <div className="w-1/3 flex justify-end items-center gap-4 group">
-        {/* Кастомная Ч/Б кнопка Lyrics (Текст песен) */}
         <button
           onClick={() => setIsLyricsOpen(!isLyricsOpen)}
           title="Текст песни"
@@ -239,7 +270,7 @@ export default function Player() {
           <Quote size={12} className="transform rotate-180 flex-shrink-0" strokeWidth={3.5} />
         </button>
 
-        <Volume2 size={18} className="text-zinc-400 group-hover:text-white transition" />
+        <Volume2 size={18} className="text-zinc-400 group-hover:text-white transition flex-shrink-0" />
         <input
           type="range"
           min="0" max="1" step="0.01"
@@ -247,7 +278,7 @@ export default function Player() {
           onChange={handleVolumeChange}
           className="
             w-24 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer 
-            accent-white
+            accent-white flex-shrink-0
             [&::-webkit-slider-thumb]:appearance-none
             [&::-webkit-slider-thumb]:h-3
             [&::-webkit-slider-thumb]:w-3
@@ -261,6 +292,7 @@ export default function Player() {
           "
         />
       </div>
+      
     </div>
   )
 }
