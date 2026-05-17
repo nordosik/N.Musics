@@ -1,10 +1,11 @@
 'use client'
 import { usePlayer } from '../lib/usePlayer'
-import { Play, Pause, Volume2, Music, SkipBack, SkipForward } from 'lucide-react'
+import LyricsOverlay from './LyricsOverlay'
+import { Play, Pause, Volume2, Music, SkipBack, SkipForward, Quote } from 'lucide-react'
 import React, { useRef, useEffect, useState } from 'react' // ДОБАВИЛИ useState СЮДА
 
 export default function Player() {
-  const { activeTrack, isPlaying, setIsPlaying, playNext, playPrevious } = usePlayer();
+  const { activeTrack, isPlaying, setIsPlaying, playNext, playPrevious, isLyricsOpen, setIsLyricsOpen } = usePlayer();
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // ПЕРЕНЕСЛИ ХУКИ ВНУТРЬ КОМПОНЕНТА
@@ -221,8 +222,23 @@ export default function Player() {
         </div>
       </div>
 
-      {/* 3. ГРОМКОСТЬ */}
-      <div className="w-1/3 flex justify-end items-center gap-3 group">
+      {/* 3. ГРОМКОСТЬ + КНОПКА ТЕКСТА */}
+      <div className="w-1/3 flex justify-end items-center gap-4 group">
+        {/* Кастомная Ч/Б кнопка Lyrics (Текст песен) */}
+        <button
+          onClick={() => setIsLyricsOpen(!isLyricsOpen)}
+          title="Текст песни"
+          className={`
+            flex items-center justify-center w-8 h-8 rounded-full transition-all duration-200 active:scale-90 shadow-md flex-shrink-0
+            ${isLyricsOpen
+              ? 'bg-white text-black scale-105'
+              : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white border border-white/5'
+            }
+          `}
+        >
+          <Quote size={12} className="transform rotate-180 flex-shrink-0" strokeWidth={3.5} />
+        </button>
+
         <Volume2 size={18} className="text-zinc-400 group-hover:text-white transition" />
         <input
           type="range"

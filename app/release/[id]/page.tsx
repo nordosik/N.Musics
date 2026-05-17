@@ -2,8 +2,8 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { supabase } from '@/app/lib/supabase'
-import { usePlayer } from '@/app/lib/usePlayer'
+import { supabase } from '../../lib/supabase'
+import { usePlayer } from '../../lib/usePlayer'
 import { ChevronLeft, Share2, Clock, Play, Pause, Music, X } from 'lucide-react'
 
 export default function ReleasePage() {

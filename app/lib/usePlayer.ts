@@ -9,12 +9,15 @@ interface Track {
   is_album?: boolean;
   release_id?: string;
   duration: number;
+  lyrics?: string;
 }
 interface PlayerStore {
   activeTrack: Track | null
   isPlaying: boolean
   queue: Track[]
   currentIndex: number
+  isLyricsOpen: boolean
+  setIsLyricsOpen: (open: boolean) => void
   setActiveTrack: (track: Track) => void
   setQueue: (tracks: Track[], index?: number) => void
   playNext: () => void
@@ -28,6 +31,8 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
   isPlaying: false,
   queue: [],
   currentIndex: 0,
+  isLyricsOpen: false,
+  setIsLyricsOpen: (open) => set({ isLyricsOpen: open }),
 
   // Для одиночных треков
   setActiveTrack: (track: Track) => set({ 
