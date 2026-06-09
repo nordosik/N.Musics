@@ -8,7 +8,7 @@ import ReleaseModal from './components/ReleaseModal';
 import { supabase } from './lib/supabase';
 import TrackItem from './components/TrackItem'
 import Hero from './components/Hero'
-import SmartSearch from './components/SmartSearch' // ИМПОРТИРУЕМ НАШ УМНЫЙ ПОИСК
+import SmartSearch from './components/SmartSearch'
 import { useState, useEffect } from 'react'
 
 function HomeContent() {
@@ -77,12 +77,12 @@ function HomeContent() {
     if (data && data.length > 0) {
       const tracksWithCover = data.map(t => ({ ...t, cover_url: release.cover_url }));
       setTracks(tracksWithCover);
-    } else if (!release.is_album) {
+    } else if (release.release_type === 'single' || !release.release_type) {
+      // Обновили условие проверки на сингл
       setTracks([release]);
     }
   };
 
-  // Флаг: активен ли сейчас поиск пользователем
   const isSearching = searchQuery.trim().length > 0;
 
   return (
@@ -90,7 +90,6 @@ function HomeContent() {
       <Hero />
 
       <div className="px-8 mt-12">
-        {/* НАША ШАПКА С ИНПУТОМ (ВСЕГДА НА МЕСТЕ) */}
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-bold tracking-tight">
             {isSearching ? "Результаты поиска" : "Recent Releases"}
@@ -99,17 +98,7 @@ function HomeContent() {
           <div className="flex items-center gap-4">
             <div className="relative flex items-center" style={{ height: '40px' }}>
               <div className="absolute z-20 flex items-center justify-center pointer-events-none" style={{ left: '14px', top: '50%', transform: 'translateY(-50%)' }}>
-                <svg
-                  xmlns="http://w3.org"
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#71717a"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg xmlns="http://w3.org" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
                 </svg>
               </div>
@@ -127,15 +116,12 @@ function HomeContent() {
           </div>
         </div>
 
-        {/* ДИНАМИЧЕСКИЙ КОНТЕНТ */}
-        {searchQuery.trim().length > 0 ? (
-          /* Передаем функцию клика внутрь умного поиска */
+        {isSearching ? (
           <SmartSearch
             externalQuery={searchQuery}
             onReleaseClick={handleOpenRelease}
           />
         ) : (
-          /* Если инпут пустой — работает твоя старая родная сетка */
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
             {releases?.map((release, index) => (
               <TrackItem
@@ -154,6 +140,7 @@ function HomeContent() {
         tracks={tracks}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        isAdmin={isAdmin}
       />
     </main>
   );

@@ -11,17 +11,17 @@ export default function ReleasePage() {
   const router = useRouter()
   const [release, setRelease] = useState<any>(null)
   const [tracks, setTracks] = useState<any[]>([])
-  const { activeTrack, isPlaying, setIsPlaying, setQueue } = usePlayer()
+  
+  // ДОБАВИЛИ ИМПОРТ isLyricsOpen ИЗ НАШЕГО ZUSTAND СТОРА
+  const { activeTrack, isPlaying, setIsPlaying, setQueue, isLyricsOpen } = usePlayer()
   const [copied, setCopied] = useState(false)
-
-  const [playerHidden, setPlayerHidden] = useState(false);
+  const [playerHidden, setPlayerHidden] = useState(false)
 
   const togglePlayer = () => {
-    const newState = !playerHidden;
-    setPlayerHidden(newState);
-    // Отправляем событие плееру
-    window.dispatchEvent(new CustomEvent('toggle-player', { detail: newState }));
-  };
+    const newState = !playerHidden
+    setPlayerHidden(newState)
+    window.dispatchEvent(new CustomEvent('toggle-player', { detail: newState }))
+  }
 
   useEffect(() => {
     const fetchReleaseData = async () => {
@@ -37,32 +37,41 @@ export default function ReleasePage() {
 
   if (!release) return null
 
-  const isCurrentPlaying = activeTrack && tracks.some(t => t.id === activeTrack.id) && isPlaying;
+  const isCurrentPlaying = activeTrack && tracks.some(t => t.id === activeTrack.id) && isPlaying
 
   return (
     <main className="min-h-screen bg-[#050505] text-white p-8 md:p-24 overflow-y-auto">
 
-      {/* КНОПКА ВЫХОДА (КРЕСТИК) */}
-      <button onClick={() => router.push('/')} className="fixed top-8 right-8 z-50 p-2 text-zinc-700 hover:text-white transition-colors">
-        <X size={32} strokeWidth={1.5} />
-      </button>
+      {/* ФИКС: КНОПКА ВЫХОДА ТЕПЕРЬ РЕНДЕРИТСЯ ТОЛЬКО ЕСЛИ ТЕКСТ ЗАКРЫТ */}
+      {!isLyricsOpen && (
+        <button 
+          onClick={() => router.push('/')} 
+          className="fixed top-8 right-8 z-50 p-2 text-zinc-700 hover:text-white transition-colors"
+        >
+          <X size={32} strokeWidth={1.5} />
+        </button>
+      )}
 
       <div className="flex flex-col lg:flex-row min-h-screen w-full relative">
 
         {/* ЛЕВАЯ КОЛОНКА: ОБЛОЖКА И ИНФО */}
         <div className="w-full lg:w-[400px] lg:fixed lg:top-0 lg:left-0 lg:bottom-0 p-12 flex flex-col justify-start z-20 bg-[#050505] md:bg-transparent">
 
-          {/* ОБЛОЖКА: Оставили w-64 h-64, но добавили mt-4 чтобы чуть выше была */}
+          {/* ОБЛОЖКА */}
           <div className="w-64 h-64 overflow-hidden mb-8 shadow-2xl shrink-0 mt-4">
             <img src={release.cover_url} className="w-full h-full object-cover" alt="" />
           </div>
 
           <div className="w-full text-center md:text-left">
+            {/* ДИНАМИЧЕСКИЙ ТЕГ ТИПА РЕЛИЗА */}
             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-3 block">
-              {release.is_album ? 'Album' : 'Single'}
+              {release.release_type === 'album' && 'Album'}
+              {release.release_type === 'ep' && 'EP'}
+              {release.release_type === 'single' && 'Single'}
+              {!release.release_type && 'Single'}
             </span>
 
-            {/* Твой H1 с динамическим размером (вставь сюда свою формулу стиля, если она была) */}
+            {/* Заголовок релиза */}
             <h1 className="text-4xl font-black tracking-tighter uppercase leading-none mb-4">
               {release.title}
             </h1>
@@ -97,13 +106,13 @@ export default function ReleasePage() {
         {/* ПРАВАЯ КОЛОНКА: ТРЕКЛИСТ */}
         <div className="flex-1 lg:ml-[400px] h-full flex flex-col p-8 md:p-20 overflow-hidden">
 
-          {/* Заголовок треклиста — теперь он всегда на месте */}
+          {/* Заголовок треклиста */}
           <div className="w-full max-w-2xl mx-auto flex items-center justify-between px-4 py-3 border-b-2 border-white/10 mb-6 shrink-0">
             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-500">Tracklist</span>
             <Clock size={14} className="text-zinc-500" />
           </div>
 
-          {/* КОНТЕЙНЕР ДЛЯ ТРЕКОВ: Центрирует содержимое, если его мало */}
+          {/* КОНТЕЙНЕР ДЛЯ ТРЕКОВ */}
           <div className="flex-1 flex flex-col justify-center min-h-0">
             <div className="overflow-y-auto max-h-full pr-2 custom-scrollbar w-full max-w-2xl mx-auto">
               <div className="flex flex-col">
@@ -135,7 +144,6 @@ export default function ReleasePage() {
             </div>
           </div>
 
-          {/* Нижняя заглушка теперь минимальна, просто чтобы не липло к краю */}
           <div className="h-10 shrink-0" />
         </div>
       </div>

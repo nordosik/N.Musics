@@ -1,5 +1,5 @@
 'use client'
-import { Play, Music } from 'lucide-react'
+import { Play, Music, Disc } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { usePlayer } from '../lib/usePlayer'
 
@@ -15,7 +15,7 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
   // Проверка: играет ли сейчас этот конкретный релиз
   const isCurrentActive = isPlaying && activeTrack && (
     // 1. Если ID трека совпадает с ID релиза (для синглов)
-    activeTrack.id === release.id || 
+    activeTrack.id === release.id ||
     // 2. Если в треке указано название этого релиза (для альбомов)
     activeTrack.release_id === release.title
   );
@@ -26,32 +26,36 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
   };
 
   return (
-    <motion.div 
+    <motion.div
       onClick={onClick}
       initial="hidden"
       whileInView="visible"
       viewport={{ once: true, amount: 0.01 }}
       variants={variants}
       transition={{ duration: 0.5, ease: "easeOut", delay: index * 0.05 }}
-      className={`group cursor-pointer p-4 rounded-md transition-all duration-500 border-2 box-border flex flex-col h-full ${
-        isCurrentActive 
-          ? 'bg-zinc-800/80 border-white shadow-[0_0_20px_rgba(255,255,255,0.15)] scale-[1.02]' 
+      className={`group cursor-pointer p-4 rounded-md transition-all duration-500 border-2 box-border flex flex-col h-full ${isCurrentActive
+          ? 'bg-zinc-800/80 border-white shadow-[0_0_20px_rgba(255,255,255,0.15)] scale-[1.02]'
           : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60'
-      }`}
+        }`}
     >
-      <motion.div 
+      <motion.div
         whileHover={{ scale: 1.02 }}
         className="aspect-square bg-zinc-800 rounded-md mb-4 flex items-center justify-center relative overflow-hidden shadow-lg"
       >
         {release.cover_url ? (
-          <img 
-            src={release.cover_url} 
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
-            alt={release.title} 
+          <img
+            src={release.cover_url}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            alt={release.title}
           />
         ) : (
           <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-            <Music className="text-zinc-600 w-12 h-12" />
+            {/* Если это альбом или EP — рисуем диск, иначе (сингл) — ноту */}
+            {release.release_type === 'album' || release.release_type === 'ep' ? (
+              <Disc className="text-zinc-600 w-12 h-12 animate-[spin_8s_linear_infinite]" />
+            ) : (
+              <Music className="text-zinc-600 w-12 h-12" />
+            )}
           </div>
         )}
 
@@ -66,9 +70,13 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
       <h3 className="font-bold text-sm text-white leading-tight break-words line-clamp-2">
         {release.title}
       </h3>
-      
+
+      {/* ДИНАМИЧЕСКИЙ ВЫВОД ТИПА РЕЛИЗА (SINGLE, EP, ALBUM) */}
       <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-widest font-medium">
-        {release.is_album ? 'Album' : 'Single'} • {new Date(release.created_at || Date.now()).getFullYear()}
+        {release.release_type === 'album' && 'Album'}
+        {release.release_type === 'ep' && 'EP'}
+        {release.release_type === 'single' && 'Single'}
+        {!release.release_type && 'Single'} • {new Date(release.created_at || Date.now()).getFullYear()}
       </p>
     </motion.div>
   );

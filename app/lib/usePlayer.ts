@@ -7,7 +7,7 @@ interface Track {
   title: string;
   audio_url: string;
   cover_url?: string;
-  is_album?: boolean;
+  release_type?: 'single' | 'ep' | 'album'; 
   release_id?: string;
   duration: number;
   lyrics?: string;
@@ -22,12 +22,31 @@ interface PlayerStore {
   isLyricsOpen: boolean
   repeatMode: RepeatMode
   isShuffle: boolean
+  
+  // Состояния громкости
+  volume: number
+  prevVolume: number
+  
+  // Кэш скролла текстов
+  lyricsScrollPositions: Record<string | number, number>
+
+  // Экшены управления интерфейсом
   setIsLyricsOpen: (open: boolean) => void
   setActiveTrack: (track: Track) => void
   setQueue: (tracks: Track[], index?: number) => void
+  setIsPlaying: (playing: boolean) => void
+  
+  // Экшены громкости
+  setVolume: (value: number) => void
+  setPrevVolume: (value: number) => void
+  toggleMute: () => void
+
+  // Экшены кэша скролла
+  setLyricsScrollPosition: (trackId: string | number, position: number) => void
+  
+  // Логика воспроизведения
   playNext: (isAutoEnded?: boolean) => void
   playPrevious: () => void
-  setIsPlaying: (playing: boolean) => void
   togglePlay: () => void
   toggleRepeat: () => void
   toggleShuffle: () => void
@@ -52,8 +71,16 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
   isLyricsOpen: false,
   repeatMode: 'off',
   isShuffle: false,
-  setIsLyricsOpen: (open) => set({ isLyricsOpen: open }),
+  
+  // Дефолтные значения громкости
+  volume: 1,
+  prevVolume: 1,
+  
+  // Дефолтный кэш скролла
+  lyricsScrollPositions: {},
 
+  setIsLyricsOpen: (open) => set({ isLyricsOpen: open }),
+  
   setActiveTrack: (track: Track) => set({
     activeTrack: track,
     isPlaying: true,
@@ -62,10 +89,29 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
     currentIndex: 0
   }),
 
+  setVolume: (value) => set({ volume: value }),
+  setPrevVolume: (value) => set({ prevVolume: value }),
+  
+  toggleMute: () => {
+    const { volume, prevVolume, setVolume } = get();
+    if (volume > 0) {
+      set({ prevVolume: volume });
+      setVolume(0);
+    } else {
+      setVolume(prevVolume > 0 ? prevVolume : 1);
+    }
+  },
+
+  setLyricsScrollPosition: (trackId, position) => set((state) => ({
+    lyricsScrollPositions: {
+      ...state.lyricsScrollPositions,
+      [trackId]: position
+    }
+  })),
+
   setQueue: (tracks: Track[], index = 0) => {
     const { isShuffle } = get();
     const selectedTrack = tracks[index];
-
     if (isShuffle && tracks.length > 1) {
       const shuffledRemaining = shuffleArray(tracks, selectedTrack.id);
       set({
@@ -88,26 +134,20 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
 
   playNext: (isAutoEnded = false) => {
     const { queue, originalQueue, activeTrack, currentIndex, repeatMode, isShuffle } = get();
-
-    // 1. ПРИОРИТЕТ ДЛЯ REPEAT ONE: Если трек кончился сам — нативный loop в Player.tsx зациклит его. 
-    // Если это шаффл + repeat_one — функция просто прерывается, не давая переключить трек.
+    
     if (isAutoEnded && repeatMode === 'one') {
       return;
     }
-
-    // Если нажат ручной клик "Вперед" при Repeat One на сингле — просто перезапускаем его
+    
     if (!isAutoEnded && repeatMode === 'one' && queue.length === 1) {
       const current = activeTrack;
       set({ activeTrack: null, isPlaying: false });
       setTimeout(() => set({ activeTrack: current, isPlaying: true }), 30);
       return;
     }
-
-    // 2. ЛОГИКА ДЛЯ СИНГЛОВ ИЛИ ПОСЛЕДНИХ ТРЕКОВ
+    
     const isLastTrack = currentIndex === queue.length - 1;
-
     if (!isLastTrack) {
-      // Обычный переход к следующему треку в текущей очереди
       const nextIndex = currentIndex + 1;
       set({
         currentIndex: nextIndex,
@@ -115,21 +155,15 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
         isPlaying: true
       });
     } else {
-      // Мы дошли до конца очереди (или это единственный трек в сингле)
       if (repeatMode === 'all') {
         if (queue.length === 1) {
-          // ЖЕСТКИЙ ФИКС СИНГЛА: сбрасываем и играем заново без зависаний
           const current = activeTrack;
           set({ activeTrack: null, isPlaying: false });
           setTimeout(() => set({ activeTrack: current, isPlaying: true }), 30);
         } else if (isShuffle) {
-          // ЧЕСТНЫЙ СЛУЧАЙНЫЙ ПОВТОР АЛЬБОМА: пересобираем очередь заново случайным образом!
-          const currentTrack = queue[currentIndex]; // Последний игравший трек
-          // Перемешиваем оригинальный список, исключая текущий трек, чтобы он не повторился дважды подряд
+          const currentTrack = queue[currentIndex];
           const freshlyShuffled = shuffleArray(originalQueue, currentTrack.id);
           const newQueue = [currentTrack, ...freshlyShuffled];
-
-          // Сразу шагаем на второй трек в новой случайной очереди
           set({
             queue: newQueue,
             currentIndex: 1,
@@ -137,7 +171,6 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
             isPlaying: true
           });
         } else {
-          // Обычный повтор альбома без шаффла: прыгаем строго на первый трек
           set({
             currentIndex: 0,
             activeTrack: queue[0],
@@ -145,7 +178,6 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
           });
         }
       } else {
-        // Повтор выключен — аккуратно тушим плеер в конце трека
         set({ isPlaying: false });
       }
     }
@@ -161,7 +193,6 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
         isPlaying: true
       });
     } else {
-      // Если мы в самом начале очереди — сбрасываем текущую песню на 0:00
       const current = queue[0];
       set({ activeTrack: null, isPlaying: false });
       setTimeout(() => set({ activeTrack: current, isPlaying: true }), 30);
@@ -170,17 +201,13 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
 
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
-
+  
   toggleRepeat: () => set((state) => {
     const nextModes: Record<RepeatMode, RepeatMode> = { off: 'one', one: 'all', all: 'off' };
     const nextMode = nextModes[state.repeatMode];
-
-    // ЖЕСТКОЕ УСЛОВИЕ: Если переключились на повтор ОДНОГО трека ('one')
     if (nextMode === 'one' && state.isShuffle) {
-      // Отключаем шаффл и возвращаем оригинальную очередь, чтобы ничего не перемешивалось
       const currentTrack = state.activeTrack;
       const originalIdx = state.originalQueue.findIndex(t => t.id === currentTrack?.id);
-
       return {
         repeatMode: nextMode,
         isShuffle: false,
@@ -188,16 +215,13 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
         currentIndex: originalIdx !== -1 ? originalIdx : 0
       };
     }
-
     return { repeatMode: nextMode };
   }),
 
   toggleShuffle: () => set((state) => {
-    // ЖЕСТКОЕ УСЛОВИЕ: Если СЕЙЧАС включен повтор ОДНОГО трека, то клик по кнопке перемешивания просто ИГНОРИРУЕТСЯ
     if (state.repeatMode === 'one') {
-      return {}; // Ничего не меняем в стейте, блокируем клик
+      return {};
     }
-
     const nextShuffle = !state.isShuffle;
     if (nextShuffle) {
       if (!state.activeTrack || state.queue.length <= 1) {
@@ -206,7 +230,6 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
       const currentTrack = state.activeTrack;
       const baseTracks = state.originalQueue.length ? state.originalQueue : state.queue;
       const shuffledRemaining = shuffleArray(baseTracks, currentTrack.id);
-      
       return {
         isShuffle: nextShuffle,
         originalQueue: baseTracks,
