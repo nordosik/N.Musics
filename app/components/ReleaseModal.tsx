@@ -59,10 +59,16 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
   const [commentaryText, setCommentaryText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
-  // 1. Первый хук синхронизации текста комментария
+  // 1. Первый хук синхронизации текста комментария + ФИКС АВТОСБРОСА ЗУМА ОБЛОЖКИ
   useEffect(() => {
-    if (release) setCommentaryText(release.commentary || '')
-  }, [release])
+    if (release) {
+      setCommentaryText(release.commentary || '')
+    }
+
+    // ЖЕЛЕЗОБЕТОННЫЙ ФИКС: Как только меняется релиз или закрывается модалка — 
+    // принудительно возвращаем обложку в обычный режим карточки с треклистом
+    setIsCoverExpanded(false);
+  }, [release, isOpen]); // Добавили isOpen в зависимости, чтобы сброс срабатывал и при закрытии окна
 
   // 2. Второй хук бесшовного скрытия плеера, заморозки заднего фона и сохранения позиции скролла
   useEffect(() => {

@@ -48,7 +48,7 @@ export default function Player() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      
+
       switch (e.code) {
         case 'Space':
           e.preventDefault();
@@ -110,7 +110,7 @@ export default function Player() {
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
     setVolume(v);
-    
+
     // Если пользователь двигает ползунок руками, обновляем prevVolume,
     // чтобы при следующем анмуте не вернулся ноль
     if (v > 0) {
@@ -187,20 +187,20 @@ export default function Player() {
           >
             <Shuffle size={18} />
           </button>
-          
+
           <SkipBack
             onClick={() => playPrevious()}
             className="hover:text-white cursor-pointer transition active:scale-90"
             size={22}
           />
-          
+
           <button
             onClick={() => setIsPlaying(!isPlaying)}
             className="p-2.5 bg-white text-black rounded-full hover:scale-105 transition active:scale-95 flex items-center justify-center"
           >
             {isPlaying ? <Pause fill="black" size={18} /> : <Play fill="black" size={18} className="ml-0.5" />}
           </button>
-          
+
           <SkipForward
             onClick={() => playNext(false)}
             className="hover:text-white cursor-pointer transition active:scale-90"
@@ -212,7 +212,7 @@ export default function Player() {
             className="relative transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center w-8 h-8"
             title={
               repeatMode === 'one' ? "Повтор одного трека" :
-              repeatMode === 'all' ? "Повтор всего релиза" : "Повтор выключен"
+                repeatMode === 'all' ? "Повтор всего релиза" : "Повтор выключен"
             }
           >
             <div className={`transition-colors ${repeatMode !== 'off' ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]' : 'text-zinc-500 hover:text-zinc-300'}`}>
@@ -245,22 +245,21 @@ export default function Player() {
         </div>
       </div>
 
-            {/* 3. МОДЕРНИЗИРОВАННАЯ ГРОМКОСТЬ + КНОПКА ТЕКСТА */}
+      {/* 3. МОДЕРНИЗИРОВАННАЯ ГРОМКОСТЬ + КНОПКА ТЕКСТА */}
       <div className="w-1/3 flex justify-end items-center gap-4">
         <button
           onClick={() => setIsLyricsOpen(!isLyricsOpen)}
           title="Текст песни"
           className={`
-            flex items-center justify-center w-8 h-8 rounded-full transition-all 
-            duration-200 active:scale-90 shadow-md flex-shrink-0
-            ${isLyricsOpen ? 'bg-white text-black scale-105' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white border border-white/5'}
+            p-1 transition-all duration-200 active:scale-95 flex-shrink-0
+            ${isLyricsOpen ? 'text-white' : 'text-zinc-400 hover:text-white'}
           `}
         >
-          <Quote size={12} className="transform rotate-180 flex-shrink-0" strokeWidth={3.5} />
+          <Quote size={18} className="transform rotate-180 flex-shrink-0" strokeWidth={2.5} />
         </button>
 
         {/* НАША УМНАЯ ИКОНКА С ДИНАМИЧЕСКИМ МУТОМ */}
-        <button 
+        <button
           onClick={toggleMute}
           className="text-zinc-400 hover:text-white transition-colors p-1 active:scale-95 flex-shrink-0"
         >
