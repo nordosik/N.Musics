@@ -482,7 +482,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
                         <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] mb-2 opacity-50">{t.releaseBackground}</span>
                         <h2 className="text-xl font-black text-white uppercase tracking-tighter text-center leading-none">{t.story}</h2>
                       </div>
-                      <div className="overflow-y-auto flex-1 p-6 md:p-8 bg-[#121212] custom-scrollbar flex flex-col justify-start min-h-0">
+                      <div className="overflow-y-auto flex-1 px-6 md:px-8 py-4 bg-[#121212] custom-scrollbar flex flex-col justify-center min-h-0 items-center">
                         {isAdmin ? (
                           <AdminStory text={commentaryText} onChange={setCommentaryText} onSave={handleSaveCommentary} loading={isSaving} t={t} />
                         ) : (
