@@ -482,7 +482,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
                         <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.5em] mb-2 opacity-50">{t.releaseBackground}</span>
                         <h2 className="text-xl font-black text-white uppercase tracking-tighter text-center leading-none">{t.story}</h2>
                       </div>
-                      <div className="overflow-y-auto flex-1 px-6 md:px-8 py-4 bg-[#121212] custom-scrollbar flex flex-col justify-center min-h-0 items-center">
+                      <div className="overflow-y-auto flex-1 px-6 md:px-10 py-6 bg-[#121212] custom-scrollbar flex flex-col justify-start min-h-0 text-left items-stretch">
                         {isAdmin ? (
                           <AdminStory text={commentaryText} onChange={setCommentaryText} onSave={handleSaveCommentary} loading={isSaving} t={t} />
                         ) : (
@@ -537,15 +537,14 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
 }
 
 const AdminStory = ({ text, onChange, onSave, loading, t }: any) => (
-  <div className="flex flex-col gap-4 w-full h-full flex-1 min-h-0">
-    {/* flex-1 заставит серое текстовое поле забрать себе ВСЁ свободное место до подвала */}
+  <div className="flex flex-col gap-4 w-full h-full flex-1 min-h-0 text-left items-stretch">
     <textarea
       value={text}
       onChange={(e) => onChange(e.target.value)}
       placeholder={t?.placeholder || "Введи текст..."}
-      className="w-full flex-1 bg-black/40 border border-white/5 p-5 rounded-[24px] text-base font-medium text-zinc-300 outline-none focus:border-white/20 transition resize-none custom-scrollbar tracking-tight min-h-0"
+      /* Убедись, что p-5 одинаковый со всех сторон, а text-left выравнивает по левому краю без перекосов */
+      className="w-full flex-1 bg-black/40 border border-white/5 p-5 rounded-[24px] text-base font-medium text-zinc-300 outline-none focus:border-white/20 transition resize-none custom-scrollbar tracking-tight min-h-0 text-left"
     />
-    {/* Кнопка теперь железно прижата к самому низу серого прямоугольника */}
     <button
       onClick={onSave}
       disabled={loading}
@@ -557,11 +556,18 @@ const AdminStory = ({ text, onChange, onSave, loading, t }: any) => (
 )
 
 const UserStory = ({ text, t }: { text: string, t: any }) => (
-  <div className="max-h-[320px] overflow-y-auto custom-scrollbar pr-1 w-full bg-black/40 border border-white/5 p-6 rounded-[24px] text-center flex items-center justify-center">
-    {text.trim() ? (
-      <p className="text-zinc-200 text-base font-medium tracking-tight leading-relaxed whitespace-pre-wrap text-left w-full">{text}</p>
+  <div className="flex-1 w-full h-full min-h-0 bg-black/40 border border-white/5 p-6 rounded-[24px] overflow-y-auto custom-scrollbar flex flex-col justify-start items-start text-left">
+    {text && text.trim() ? (
+      <p className="text-zinc-200 text-base font-medium tracking-tight leading-relaxed whitespace-pre-wrap text-left w-full block">
+        {text}
+      </p>
     ) : (
-      <p className="text-zinc-600 text-xs font-black uppercase tracking-widest">{t?.noStory}</p>
+      /* Если истории нет — аккуратно центрируем заглушку по центру серого поля */
+      <div className="flex items-center justify-center w-full h-full my-auto py-10">
+        <p className="text-zinc-600 text-xs font-black uppercase tracking-widest text-center w-full block">
+          {t?.noStory || "Автор еще не добавил историю к этому релизу."}
+        </p>
+      </div>
     )}
   </div>
 )
