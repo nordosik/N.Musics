@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { X, Plus, Music, Image as ImageIcon, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePlayer } from '../lib/usePlayer'
+import { locales } from '../lib/locales'
 
 // Описываем интерфейс трека с локальной длительностью для валидатора
 interface UploadTrack {
@@ -18,6 +20,14 @@ export default function UploadModal() {
   const [lyrics, setLyrics] = useState('')
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const { language } = usePlayer();
+  const t = locales[language as 'ru' | 'en' || 'en'];
+
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Храним все треки в единой очереди (начинаем с одного пустого)
   const [tracks, setTracks] = useState<UploadTrack[]>([
@@ -68,7 +78,7 @@ export default function UploadModal() {
     // Валидация: название релиза и хотя бы один заполненный трек
     const filledTracks = tracks.filter(t => t.title && t.file)
     if (!title || filledTracks.length === 0) {
-      return alert('Required fields: Release Title and at least one Track with File')
+      return alert(t.requiredFieldsAlert)
     }
 
     setLoading(true)
@@ -135,7 +145,7 @@ export default function UploadModal() {
       setIsOpen(false)
       window.location.reload()
     } catch (e: any) {
-      alert(`Error: ${e.message}`)
+      alert(`${t.uploadErrorAlert} ${e.message}`)
     } finally {
       setLoading(false)
     }
@@ -173,7 +183,8 @@ export default function UploadModal() {
         onClick={() => setIsOpen(true)}
         className="flex items-center gap-2 bg-white hover:bg-zinc-200 text-black px-5 py-2.5 rounded-full font-black text-[11px] uppercase tracking-widest transition-all active:scale-95"
       >
-        <Plus size={14} strokeWidth={3} /> Add Release
+        <Plus size={14} strokeWidth={3} />
+        {isMounted ? t.addRelease : "+ Add Release"}
       </button>
 
       <AnimatePresence>
@@ -195,23 +206,25 @@ export default function UploadModal() {
                 <X size={20} />
               </button>
 
-              <h2 className="text-2xl font-black tracking-tighter uppercase text-white">New Release</h2>
+              <h2 className="text-2xl font-black tracking-tighter uppercase text-white">{t.newReleaseTitle}</h2>
 
               {/* Автоматический интерактивный индикатор формата релиза */}
               <div className="flex bg-black p-3 rounded-xl border border-white/5 items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Detected Type:</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{t.detectedType}</span>
                 <span className="px-3 py-1 bg-white text-black rounded-md text-[10px] font-black uppercase tracking-widest animate-pulse">
-                  {releaseType}
+                  {releaseType === 'album' && t.album}
+                  {releaseType === 'ep' && t.ep}
+                  {releaseType === 'single' && t.single}
                 </span>
               </div>
 
               <div className="space-y-5">
                 {/* Title */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 ml-1">Release Title</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 ml-1">{t.releaseTitleLabel}</label>
                   <input
                     type="text"
-                    placeholder="ENTER TITLE..."
+                    placeholder={t.enterTitlePlaceholder}
                     className="w-full bg-black border border-white/5 p-3 rounded-xl focus:border-white/20 outline-none transition text-sm font-bold uppercase tracking-tighter text-white"
                     onChange={e => setTitle(e.target.value)}
                   />
@@ -240,7 +253,7 @@ export default function UploadModal() {
                       <span className="text-[10px] font-mono text-zinc-700 w-4 text-center">{index + 1}</span>
 
                       <input
-                        placeholder="TRACK TITLE"
+                        placeholder={t.trackTitlePlaceholder}
                         className="bg-transparent flex-1 outline-none text-[11px] font-bold uppercase tracking-tighter text-white"
                         value={track.title}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -279,7 +292,7 @@ export default function UploadModal() {
                         <button
                           onClick={() => removeTrack(track.id)}
                           className="p-2 text-zinc-700 hover:text-red-500 transition-colors rounded-lg hover:bg-red-500/10"
-                          title="Remove track"
+                          title={t.removeTrackTitle}
                         >
                           <X size={12} />
                         </button>
@@ -291,17 +304,17 @@ export default function UploadModal() {
                     onClick={() => setTracks([...tracks, { id: Math.random().toString(), title: '', file: null, duration: null }])}
                     className="w-full py-2 border border-dashed border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
                   >
-                    + Add track
+                    {t.addTrackBtn}
                   </button>
                 </div>
 
                 {/* Cover Artwork */}
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 ml-1">Cover Image</label>
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-600 ml-1">{t.coverImageLabel}</label>
                   <label className={`flex items-center justify-between p-3 bg-black border rounded-xl cursor-pointer transition-all ${coverFile ? 'border-white/20' : 'border-white/5 hover:border-white/10'}`}>
                     <input type="file" accept="image/*" className="hidden" onChange={e => setCoverFile(e.target.files?.[0] || null)} />
                     <span className="text-[11px] font-bold text-zinc-500 uppercase">
-                      {coverFile ? 'Image Ready' : 'Select Artwork'}
+                      {coverFile ? t.imageReady : t.selectArtwork}
                     </span>
                     {coverFile ? <Check size={14} className="text-white" /> : <ImageIcon size={14} className="text-zinc-700" />}
                   </label>
@@ -313,7 +326,7 @@ export default function UploadModal() {
                   disabled={loading}
                   className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-zinc-200 transition-all active:scale-[0.98] mt-4 shadow-xl"
                 >
-                  {loading ? 'Processing...' : 'Publish Release'}
+                  {loading ? t.processing : t.publishRelease}
                 </button>
               </div>
             </motion.div>

@@ -1,10 +1,15 @@
 'use client'
+
 import { usePlayer } from '../lib/usePlayer'
-import { Play, Pause, Volume2, Volume1, VolumeX, Music, Disc, SkipBack, SkipForward, Quote, Shuffle, Repeat, Repeat1 } from 'lucide-react'
+import { locales } from '../lib/locales' // ИМПОРТ НАШЕГО СЛОВАРЯ
+import {
+  Play, Pause, Volume2, Volume1, VolumeX, Music, Disc, SkipBack,
+  SkipForward, Quote, Shuffle, Repeat, Repeat1
+} from 'lucide-react'
 import React, { useRef, useEffect, useState } from 'react'
 
 export default function Player() {
-  // 1. Вытаскиваем все нужные глобальные стейты и функции, включая новую громкость
+  // 1. Вытаскиваем все глобальные стейты, включая language и toggleLanguage
   const {
     activeTrack,
     isPlaying,
@@ -17,18 +22,30 @@ export default function Player() {
     toggleShuffle,
     repeatMode,
     toggleRepeat,
-    // НАШИ НОВЫЕ ХУКИ ГРОМКОСТИ ИЗ ZUSTAND
     volume,
     setVolume,
     prevVolume,
-    toggleMute
+    toggleMute,
+    language,
+    toggleLanguage,
+    setCurrentTime: setGlobalCurrentTime
   } = usePlayer();
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
 
-  // 2. Инициализируем стартовую громкость из localStorage при первой загрузке плеера
+  // ЗАЩИТА ОТ РАССИНХРОНИЗАЦИИ:
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Этот эффект сработает СТРОГО в браузЕре после полной загрузки страницы
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Переменная перевода интерфейса
+  const t = locales[language as 'ru' | 'en' || 'en'];
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedVolume = localStorage.getItem('player_volume');
@@ -44,11 +61,9 @@ export default function Player() {
     }
   }, [repeatMode]);
 
-  // 3. Исправленный хук горячих клавиш (работает через Zustand стейт)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
       switch (e.code) {
         case 'Space':
           e.preventDefault();
@@ -78,7 +93,6 @@ export default function Player() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, setIsPlaying, volume, setVolume, toggleMute]);
 
-  // 4. Синхронизация громкости с аудио-тегом и запись в localStorage
   useEffect(() => {
     localStorage.setItem('player_volume', volume.toString());
     if (audioRef.current) {
@@ -101,18 +115,17 @@ export default function Player() {
 
   const onTimeUpdate = () => {
     if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime)
+      const time = audioRef.current.currentTime
+      setCurrentTime(time)
       setDuration(audioRef.current.duration)
+      // Отправляем время в глобальный стор, чтобы оверлей текста его видел
+      setGlobalCurrentTime(time)
     }
   }
 
-  // 5. Обработчик ручного перемещения ползунка громкости
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseFloat(e.target.value);
     setVolume(v);
-
-    // Если пользователь двигает ползунок руками, обновляем prevVolume,
-    // чтобы при следующем анмуте не вернулся ноль
     if (v > 0) {
       usePlayer.setState({ prevVolume: v });
     }
@@ -126,6 +139,7 @@ export default function Player() {
     const newTime = clickedPercent * duration;
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
+    setGlobalCurrentTime(newTime);
   };
 
   const [isForcedHidden, setIsForcedHidden] = useState(false);
@@ -137,13 +151,34 @@ export default function Player() {
 
   const isMultiTrack = activeTrack?.release_type === 'album' || activeTrack?.release_type === 'ep';
 
+  // ЕСЛИ ЕЩЕ НЕ ПРИМОНТИРОВАЛИСЬ В БРАУЗЕРЕ — НЕ РЕНДЕРИМ ИНТЕРФЕЙС, ЧТОБЫ НЕ БЫЛО КОНФЛИКТА SSR
+  if (!isMounted) return null;
+
+  // Вытаскиваем маркеры текущего трека для динамической подложки стекла
+  const isEcosystem = activeTrack?.is_ecosystem;
+  const isHot = activeTrack?.is_hot;
+
   return (
     <div className={`
-      fixed bottom-0 left-0 right-0 h-24 bg-black/95 backdrop-blur-xl border-t 
-      border-zinc-800 px-6 flex items-center justify-between !z-50
-      transition-all duration-500 ease-in-out
-      ${isForcedHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}
-    `}>
+    fixed bottom-0 left-0 right-0 h-24 px-6 flex items-center justify-between !z-50
+    transition-all duration-500 ease-in-out
+    
+    /* ПЛОТНОЕ СТЕКЛО GLASSMORPHISM */
+    bg-zinc-950/70 backdrop-blur-2xl backdrop-saturate-150
+    
+    /* ТОНКАЯ ВЕРХНЯЯ ГРАНЬ И ТЕНЬ */
+    border-t border-white/10 shadow-[0_-15px_40px_rgba(0,0,0,0.6)]
+    
+    ${isForcedHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}
+  `}>
+
+      {/* ДИНАМИЧЕСКИЙ НЕОНОВЫЙ ПОДТЕКСТ ДЛЯ СТЕКЛА (ОЖИВЛЯЕТ ПЛЕЕР НА ЧЁРНОМ ФОНЕ) */}
+      <div className={`absolute inset-0 -z-10 pointer-events-none opacity-40 blur-3xl transition-all duration-700 ${isPlaying && isEcosystem
+        ? 'bg-gradient-to-t from-emerald-500/30 via-emerald-500/5 to-transparent'
+        : isPlaying && isHot
+          ? 'bg-gradient-to-t from-red-500/30 via-red-500/5 to-transparent'
+          : 'bg-gradient-to-t from-white/5 via-transparent to-transparent'
+        }`} />
       <audio
         key={activeTrack?.id}
         ref={audioRef}
@@ -171,9 +206,33 @@ export default function Player() {
             </>
           )}
         </div>
-        <div className="truncate">
-          <div className="text-sm font-bold text-white truncate">{activeTrack?.title}</div>
-          <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-1">Nordosik • N.Musics</div>
+        <div className="truncate flex-1 min-w-0 flex flex-col justify-center">
+          {/* Первая строка: Название трека + Маркеры */}
+          <div className="flex items-center gap-2 truncate">
+            <span className="text-sm font-bold text-white truncate">{activeTrack?.title}</span>
+
+            {activeTrack?.is_ecosystem && (
+              <span className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399,0_0_4px_#34d399]" />
+            )}
+
+            {activeTrack?.is_hot && (
+              <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                HOT
+              </span>
+            )}
+          </div>
+
+          {/* Вторая строка: Артист и Плеер (теперь ничего лишнего) */}
+          <div className="text-[10px] text-zinc-500 uppercase tracking-widest mt-0.5 truncate font-bold">
+            NORDOSIK • N.MUSICS
+          </div>
+
+          {/* Третья строка: Изолированный статус сингла (Ничего не жмет, всегда на виду) */}
+          {activeTrack?.is_ecosystem && (
+            <div className="text-[9px] uppercase font-black tracking-widest text-emerald-500/80 mt-0.5 truncate animate-fade-in">
+              {t.singleReleaseNotice.replace('• ', '')} {/* Убираем точку, так как строка теперь отдельная */}
+            </div>
+          )}
         </div>
       </div>
 
@@ -183,7 +242,8 @@ export default function Player() {
           <button
             onClick={toggleShuffle}
             className={`transition-all duration-200 hover:scale-105 active:scale-95 ${isShuffle ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]' : 'text-zinc-500 hover:text-zinc-300'}`}
-            title={isShuffle ? "Перемешивание включено" : "Перемешать всё"}
+            /* МЕНЯЕМ ТАЙТЛ НА МУЛЬТИЯЗЫЧНЫЙ */
+            title={isShuffle ? t.shuffle_on : t.shuffle_off}
           >
             <Shuffle size={18} />
           </button>
@@ -210,9 +270,10 @@ export default function Player() {
           <button
             onClick={toggleRepeat}
             className="relative transition-all duration-200 hover:scale-105 active:scale-95 flex items-center justify-center w-8 h-8"
+            /* МЕНЯЕМ ТАЙТЛ НА МУЛЬТИЯЗЫЧНЫЙ */
             title={
-              repeatMode === 'one' ? "Повтор одного трека" :
-                repeatMode === 'all' ? "Повтор всего релиза" : "Повтор выключен"
+              repeatMode === 'one' ? t.repeat_one :
+                repeatMode === 'all' ? t.repeat_all : t.repeat_off
             }
           >
             <div className={`transition-colors ${repeatMode !== 'off' ? 'text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]' : 'text-zinc-500 hover:text-zinc-300'}`}>
@@ -224,7 +285,7 @@ export default function Player() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 w-full text-[10px] text-zinc-500 font-mono mt-1 select-none">
+        <div className="flex items-center gap-2 w-full text-[11px] text-zinc-400 font-mono mt-1 select-none">
           <span>{Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')}</span>
           <div onClick={handleProgressClick} className="flex-1 h-1 bg-zinc-800 rounded-full relative cursor-pointer group">
             <div
@@ -245,20 +306,37 @@ export default function Player() {
         </div>
       </div>
 
-      {/* 3. МОДЕРНИЗИРОВАННАЯ ГРОМКОСТЬ + КНОПКА ТЕКСТА */}
+      {/* 3. МОДЕРНИЗИРОВАННАЯ ГРОМКОСТЬ + КНОПКА ТЕКСТА + СМЕНА ЯЗЫКА */}
       <div className="w-1/3 flex justify-end items-center gap-4">
+
+        {/* ======================================================== */}
+        {/* КНОПКА ПЕРЕКЛЮЧЕНИЯ ЯЗЫКА ГЛОБАЛЬНО НА ВСЕМ САЙТЕ */}
+        {/* ======================================================== */}
+        <button
+          onClick={toggleLanguage}
+          className="
+            mr-0 px-1 py-0.5 
+            text-[11px] font-black tracking-[0.2em] pl-[0.3em]
+            text-zinc-400 hover:text-white 
+            transition-all duration-300 ease-in-out
+            active:scale-90 select-none
+            hover:drop-shadow-[0_0_6px_rgba(255,255,255,0.7)]
+          "
+          title={language === 'en' ? "Переключить на Русский" : "Switch to English"}
+        >
+          {language === 'en' ? 'RU' : 'EN'}
+        </button>
+
+        {/* КНОПКА ТЕКСТА ПЕСНИ */}
         <button
           onClick={() => setIsLyricsOpen(!isLyricsOpen)}
-          title="Текст песни"
-          className={`
-            p-1 transition-all duration-200 active:scale-95 flex-shrink-0
-            ${isLyricsOpen ? 'text-white' : 'text-zinc-400 hover:text-white'}
-          `}
+          title={t.lyrics_title}
+          className={`p-1 transition-all duration-200 active:scale-95 flex-shrink-0 ${isLyricsOpen ? 'text-white' : 'text-zinc-400 hover:text-white'}`}
         >
           <Quote size={18} className="transform rotate-180 flex-shrink-0" strokeWidth={2.5} />
         </button>
 
-        {/* НАША УМНАЯ ИКОНКА С ДИНАМИЧЕСКИМ МУТОМ */}
+        {/* ИКОНКА ГРОМКОСТИ С МУТОМ */}
         <button
           onClick={toggleMute}
           className="text-zinc-400 hover:text-white transition-colors p-1 active:scale-95 flex-shrink-0"
@@ -272,7 +350,7 @@ export default function Player() {
           )}
         </button>
 
-        {/* ПОЛЗУНОК ГРОМКОСТЬ */}
+        {/* ПОЛЗУНОК ГРОМКОСТИ */}
         <input
           type="range"
           min="0"
@@ -280,10 +358,7 @@ export default function Player() {
           step="0.01"
           value={volume}
           onChange={handleVolumeChange}
-          className="
-            w-24 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white flex-shrink-0
-            [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white
-          "
+          className="w-24 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white flex-shrink-0 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
         />
       </div>
     </div>

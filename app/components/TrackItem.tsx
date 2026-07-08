@@ -1,7 +1,9 @@
 'use client'
-import { Play, Music, Disc } from 'lucide-react'
+import { Play, Music, Disc, Pause } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { usePlayer } from '../lib/usePlayer'
+import { locales } from '../lib/locales'
+import { supabase } from '../lib/supabase'
 
 interface TrackItemProps {
   release: any;
@@ -10,20 +12,64 @@ interface TrackItemProps {
 }
 
 export default function TrackItem({ release, index, onClick }: TrackItemProps) {
-  const { isPlaying, activeTrack } = usePlayer()
+  const { isPlaying, activeTrack, setQueue, setIsPlaying } = usePlayer()
+
+  const { language } = usePlayer()
+  const t = locales[language as 'ru' | 'en' || 'en']
 
   // Проверка: играет ли сейчас этот конкретный релиз
-  const isCurrentActive = isPlaying && activeTrack && (
-    // 1. Если ID трека совпадает с ID релиза (для синглов)
-    activeTrack.id === release.id ||
-    // 2. Если в треке указано название этого релиза (для альбомов)
-    activeTrack.release_id === release.title
+  const isCurrentActive = !!(
+    isPlaying &&
+    activeTrack &&
+    (
+      // 1. Если ID трека совпадает с ID карточки (для синглов, запущенных с главной)
+      activeTrack.id === release.id ||
+      // 2. Если UUID/ID релиза в треке совпадает с ID карточки (для альбомов)
+      activeTrack.release_id === release.id ||
+      // 3. Если в `release_id` трека записана строка с названием релиза
+      activeTrack.release_id === release.title ||
+      // 4. СУПЕР-ФИКС ДЛЯ СИНГЛОВ: Если название трека совпадает с названием релиза на карточке
+      (release.release_type === 'single' || !release.release_type
+        ? activeTrack.title === release.title
+        : false
+      )
+    )
   );
+
+  // Функция для мгновенного запуска первого трека релиза без открытия модалки
+  const handleQuickPlay = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    // Если этот релиз уже активен — просто переключаемplay/pause на лету
+    if (isCurrentActive) {
+      setIsPlaying(!isPlaying);
+      return;
+    }
+
+    // Если играет другой релиз или музыка выключена — загружаем этот релиз
+    const { data: releaseTracks } = await supabase
+      .from('tracks')
+      .select('*')
+      .eq('release_id', release.title)
+      .order('position', { ascending: true });
+
+    if (releaseTracks && releaseTracks.length > 0) {
+      const tracksWithCover = releaseTracks.map(t => ({ ...t, cover_url: release.cover_url }));
+      setQueue(tracksWithCover, 0);
+      setIsPlaying(true);
+    } else {
+      setQueue([release], 0);
+      setIsPlaying(true);
+    }
+  };
 
   const variants = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 }
   };
+
+  const isEcosystem = release.is_ecosystem
+  const isHot = release.is_hot
 
   return (
     <motion.div
@@ -34,8 +80,16 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
       variants={variants}
       transition={{ duration: 0.5, ease: "easeOut", delay: index * 0.05 }}
       className={`group cursor-pointer p-4 rounded-md transition-all duration-500 border-2 box-border flex flex-col h-full ${isCurrentActive
-          ? 'bg-zinc-800/80 border-white shadow-[0_0_20px_rgba(255,255,255,0.15)] scale-[1.02]'
-          : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60'
+        ? isEcosystem
+          ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.35),inset_0_0_15px_rgba(52,211,153,0.15)] scale-[1.02]'
+          : isHot
+            ? 'bg-red-950/20 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.35),inset_0_0_15px_rgba(239,68,68,0.15)] scale-[1.02]'
+            : 'bg-zinc-800/80 border-white shadow-[0_0_25px_rgba(255,255,255,0.2),inset_0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]'
+        : isEcosystem
+          ? 'bg-zinc-900/40 border-emerald-500/30 shadow-[0_0_12px_rgba(52,211,153,0.05)] hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)]'
+          : isHot
+            ? 'bg-zinc-900/40 border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.05)] hover:border-red-400 hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]'
+            : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60'
         }`}
     >
       <motion.div
@@ -50,7 +104,6 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
           />
         ) : (
           <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-            {/* Если это альбом или EP — рисуем диск, иначе (сингл) — ноту */}
             {release.release_type === 'album' || release.release_type === 'ep' ? (
               <Disc className="text-zinc-600 w-12 h-12 animate-[spin_8s_linear_infinite]" />
             ) : (
@@ -59,25 +112,37 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
           </div>
         )}
 
-        {/* Кнопка Play в стиле Spotify */}
-        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0 drop-shadow-2xl">
-          <div className="p-3 bg-white rounded-full text-black hover:scale-110 transition shadow-[0_8px_24px_rgba(0,0,0,0.5)]">
-            <Play fill="black" size={20} />
-          </div>
-        </div>
+        <button
+          onClick={handleQuickPlay}
+          className={`absolute bottom-3 right-3 transition-all duration-300 drop-shadow-2xl z-30 flex items-center justify-center p-3 bg-white text-black rounded-full hover:scale-110 active:scale-95 shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${isCurrentActive ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0'
+            }`}
+        >
+          {isCurrentActive ? <Pause fill="black" size={20} /> : <Play fill="black" size={20} className="ml-0.5" />}
+        </button>
       </motion.div>
 
       <h3 className="font-bold text-sm text-white leading-tight break-words line-clamp-2">
         {release.title}
       </h3>
 
-      {/* ДИНАМИЧЕСКИЙ ВЫВОД ТИПА РЕЛИЗА (SINGLE, EP, ALBUM) */}
-      <p className="text-[10px] text-zinc-500 mt-2 uppercase tracking-widest font-medium">
-        {release.release_type === 'album' && 'Album'}
-        {release.release_type === 'ep' && 'EP'}
-        {release.release_type === 'single' && 'Single'}
-        {!release.release_type && 'Single'} • {new Date(release.created_at || Date.now()).getFullYear()}
-      </p>
+      {/* КИСЛОТНЫЙ ДИЗАЙН ПОДВАЛА КАРТОЧКИ */}
+      <div className="flex flex-wrap items-center gap-2 mt-2">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-medium">
+          {release.release_type === 'album' && t.album}
+          {release.release_type === 'ep' && t.ep}
+          {release.release_type === 'single' && t.single}
+          {!release.release_type && t.single} • {new Date(release.created_at || Date.now()).getFullYear()}
+        </p>
+
+        {isEcosystem && (
+          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399,0_0_4px_#34d399]" />
+        )}
+        {isHot && (
+          <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+            HOT
+          </span>
+        )}
+      </div>
     </motion.div>
-  );
+  )
 }

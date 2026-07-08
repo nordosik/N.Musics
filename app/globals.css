@@ -26,7 +26,8 @@ body {
   letter-spacing: -0.02em;
 }
 
-h1, h2 {
+h1,
+h2 {
   letter-spacing: -0.04em;
 }
 
@@ -39,22 +40,27 @@ body.modal-open {
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
+
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
 }
 
 /* Прячем скроллбар для всех браузеров, сохраняя прокрутку */
 @layer base {
+
   /* Для Chrome, Safari и Opera */
   ::-webkit-scrollbar {
     display: none;
   }
 
   /* Для Firefox и IE/Edge */
-  html, body {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
+  html,
+  body {
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
   }
 
   /* Для всех элементов со скроллом (наша форма, списки и т.д.) */
@@ -62,8 +68,24 @@ body.modal-open {
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
-  
+
   *::-webkit-scrollbar {
     display: none;
   }
+}
+
+@keyframes fireGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.15), inset 0 0 5px rgba(239, 68, 68, 0.05);
+  }
+
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.35), inset 0 0 8px rgba(239, 68, 68, 0.15);
+  }
+}
+
+.animate-fire-glow {
+  animation: fireGlow 3s ease-in-out infinite;
 }

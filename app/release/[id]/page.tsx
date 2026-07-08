@@ -5,15 +5,24 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePlayer } from '../../lib/usePlayer'
 import { ChevronLeft, Share2, Clock, Play, Pause, Music, X } from 'lucide-react'
+import { locales } from '../../lib/locales'
 
 export default function ReleasePage() {
   const { id } = useParams()
   const router = useRouter()
   const [release, setRelease] = useState<any>(null)
   const [tracks, setTracks] = useState<any[]>([])
-  
+
   // ДОБАВИЛИ ИМПОРТ isLyricsOpen ИЗ НАШЕГО ZUSTAND СТОРА
-  const { activeTrack, isPlaying, setIsPlaying, setQueue, isLyricsOpen } = usePlayer()
+  const { activeTrack, isPlaying, setIsPlaying, setQueue, isLyricsOpen, language } = usePlayer()
+  const t = locales[language as 'ru' | 'en' || 'en'];
+
+  // Защита от Hydration Mismatch на динамическом роуте
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const [copied, setCopied] = useState(false)
   const [playerHidden, setPlayerHidden] = useState(false)
 
@@ -40,12 +49,12 @@ export default function ReleasePage() {
   const isCurrentPlaying = activeTrack && tracks.some(t => t.id === activeTrack.id) && isPlaying
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white p-8 md:p-24 overflow-y-auto">
+    <main className="min-h-screen bg-[#0c0c0e] text-white p-8 md:p-24 overflow-y-auto">
 
       {/* ФИКС: КНОПКА ВЫХОДА ТЕПЕРЬ РЕНДЕРИТСЯ ТОЛЬКО ЕСЛИ ТЕКСТ ЗАКРЫТ */}
       {!isLyricsOpen && (
-        <button 
-          onClick={() => router.push('/')} 
+        <button
+          onClick={() => router.push('/')}
           className="fixed top-8 right-8 z-50 p-2 text-zinc-700 hover:text-white transition-colors"
         >
           <X size={32} strokeWidth={1.5} />
@@ -65,10 +74,10 @@ export default function ReleasePage() {
           <div className="w-full text-center md:text-left">
             {/* ДИНАМИЧЕСКИЙ ТЕГ ТИПА РЕЛИЗА */}
             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-500 mb-3 block">
-              {release.release_type === 'album' && 'Album'}
-              {release.release_type === 'ep' && 'EP'}
-              {release.release_type === 'single' && 'Single'}
-              {!release.release_type && 'Single'}
+              {release.release_type === 'album' && t.album}
+              {release.release_type === 'ep' && t.ep}
+              {release.release_type === 'single' && t.single}
+              {!release.release_type && t.single}
             </span>
 
             {/* Заголовок релиза */}
@@ -88,7 +97,7 @@ export default function ReleasePage() {
               <button
                 onClick={togglePlayer}
                 className={`p-2 rounded-full border transition-all ${playerHidden ? 'bg-white text-black border-white' : 'bg-transparent text-zinc-500 border-white/10 hover:text-white'}`}
-                title={playerHidden ? "Show Player" : "Hide Player"}
+                title={isMounted ? (playerHidden ? t.showPlayer : t.hidePlayer) : "Hide Player"}
               >
                 {playerHidden ? <Music size={18} /> : <X size={18} />}
               </button>
@@ -97,54 +106,110 @@ export default function ReleasePage() {
                 onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
                 className="text-zinc-500 hover:text-white transition-colors"
               >
-                {copied ? <div className="text-[10px] font-bold">COPIED!</div> : <Share2 size={24} />}
+                {copied ? <div className="text-[10px] font-bold">{t.copiedUpper}</div> : <Share2 size={24} />}
               </button>
             </div>
           </div>
         </div>
 
         {/* ПРАВАЯ КОЛОНКА: ТРЕКЛИСТ */}
-        <div className="flex-1 lg:ml-[400px] h-full flex flex-col p-8 md:p-20 overflow-hidden">
+        <div className="flex-1 lg:ml-[400px] min-h-screen flex flex-col p-6 pt-12 md:p-12 md:pt-12">
 
           {/* Заголовок треклиста */}
-          <div className="w-full max-w-2xl mx-auto flex items-center justify-between px-4 py-3 border-b-2 border-white/10 mb-6 shrink-0">
-            <span className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-500">Tracklist</span>
+          <div className="w-full flex items-center justify-between px-2 py-3 border-b border-white/10 mb-6 shrink-0">
+            <span className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-500">{isMounted ? t.tracklist : "Tracklist"}</span>
             <Clock size={14} className="text-zinc-500" />
           </div>
 
           {/* КОНТЕЙНЕР ДЛЯ ТРЕКОВ */}
-          <div className="flex-1 flex flex-col justify-center min-h-0">
-            <div className="overflow-y-auto max-h-full pr-2 custom-scrollbar w-full max-w-2xl mx-auto">
-              <div className="flex flex-col">
-                {tracks.map((track, i) => {
-                  const isCurrent = activeTrack?.id === track.id;
-                  return (
-                    <div
-                      key={track.id}
-                      onClick={() => { setQueue(tracks, i); setIsPlaying(true); }}
-                      className={`group flex items-center justify-between p-4 border-b border-white/[0.03] cursor-pointer transition-all ${isCurrent ? 'bg-white/5' : 'hover:bg-white/[0.02]'
-                        }`}
-                    >
-                      <div className="flex items-center gap-6">
-                        <span className={`text-[12px] font-black w-6 ${isCurrent ? 'text-white' : 'text-zinc-800'}`}>
-                          {i + 1}
-                        </span>
-                        <span className={`text-sm font-black uppercase tracking-tighter ${isCurrent ? 'text-white' : 'text-zinc-500 group-hover:text-white'
+          <div className="flex-1 overflow-y-auto px-3 pr-2 custom-scrollbar overscroll-contain">
+            <div className="flex flex-col">
+              {tracks.map((track, i) => {
+                const isCurrent = activeTrack?.id === track.id;
+
+                const isCurrentTrackPlaying = isCurrent && isPlaying; // Проверка, играет ли трек прямо сейчас
+
+                const isEcosystemTrack = track.is_ecosystem;
+                const isHotNew = track.is_hot;
+
+                return (
+                  <div
+                    key={track.id}
+                    onClick={() => { setQueue(tracks, i); setIsPlaying(true); }}
+                    /* УЛЬТИМАТИВНЫЙ НЕОНОВЫЙ ИНТЕРФЕЙС СТРАНИЦЫ РЕЛИЗА */
+                    className={`group flex items-center justify-between p-4 rounded-lg my-2 mx-0.5 cursor-pointer transition-all duration-300 relative border ${isCurrentTrackPlaying
+                        ? isEcosystemTrack
+                          ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.35),inset_0_0_12px_rgba(52,211,153,0.15)] scale-[1.01]'
+                          : isHotNew
+                            ? 'bg-red-950/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35),inset_0_0_12px_rgba(239,68,68,0.15)] scale-[1.01]'
+                            : 'bg-white/5 border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)] scale-[1.01]'
+                        : isEcosystemTrack
+                          ? 'bg-zinc-900/10 border-emerald-500/10 hover:border-emerald-500/30'
+                          : isHotNew
+                            ? 'bg-zinc-900/10 border-red-500/10 animate-fire-glow hover:border-red-500/30'
+                            : 'bg-transparent border-transparent hover:bg-white/[0.02]'
+                      }`}
+                  >
+                    {/* ЛЕВАЯ ЧАСТЬ: Номер/Эквалайзер + Название + Локализованные саб-лайны */}
+                    <div className="flex items-center gap-6 min-w-0 flex-1 mr-4">
+                      {/* 1. Индекс трека или живой эквалайзер */}
+                      <span className="w-6 flex items-center justify-center text-[12px] font-mono flex-shrink-0">
+                        {isCurrentTrackPlaying ? (
+                          <div className="flex items-end gap-[2px] h-3">
+                            <span className="w-[2px] h-3 bg-white block animate-[pulse_0.6s_infinite_alternate]" />
+                            <span className="w-[2px] h-2 bg-white block animate-[pulse_0.8s_infinite_alternate]" />
+                            <span className="w-[2px] h-3 bg-white block animate-[pulse_0.7s_infinite_alternate]" />
+                          </div>
+                        ) : (
+                          <span className={isCurrent ? "text-white font-bold" : "text-zinc-600 group-hover:text-zinc-400 transition-colors"}>
+                            {i + 1}
+                          </span>
+                        )}
+                      </span>
+
+                      {/* 2. Текстовый блок: Название и подпись с полной локализацией */}
+                      <div className="flex flex-col min-w-0 justify-center">
+                        <span className={`text-sm font-black uppercase tracking-wide truncate transition-colors duration-300 ${isCurrent ? 'text-white' : 'text-zinc-400 group-hover:text-white'
                           }`}>
                           {track.title}
                         </span>
+
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className={`text-[9px] uppercase font-black tracking-widest ${isCurrent ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                            NORDOSIK
+                          </span>
+                          {isEcosystemTrack && (
+                            <span className="text-[9px] uppercase font-black tracking-widest text-emerald-500/80 truncate">
+                              {/* ПОЛНАЯ МУЛЬТИЯЗЫЧНОСТЬ ИЗ СТОРА */}
+                              {t.singleReleaseNotice}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <span className={`text-[10px] font-mono ${isCurrent ? 'text-white' : 'text-zinc-700'}`}>
+                    </div>
+
+                    {/* ПРАВАЯ ЧАСТЬ: ГЕОМЕТРИЧЕСКИЕ МАРКЕРЫ + ВРЕМЯ ТРЕКА */}
+                    <div className="flex items-center gap-4 flex-shrink-0 relative z-20">
+                      {isEcosystemTrack && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399,0_0_4px_#34d399]" />
+                      )}
+
+                      {isHotNew && (
+                        <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/40 rounded-sm tracking-widest">
+                          HOT
+                        </span>
+                      )}
+
+                      <span className={`text-[10px] font-mono w-11 text-right transition-colors ${isCurrent ? 'text-white' : 'text-zinc-600 group-hover:text-zinc-400'
+                        }`}>
                         {Math.floor(track.duration / 60)}:{(track.duration % 60).toString().padStart(2, '0')}
                       </span>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
-
-          <div className="h-10 shrink-0" />
         </div>
       </div>
     </main>

@@ -10,6 +10,8 @@ import TrackItem from './components/TrackItem'
 import Hero from './components/Hero'
 import SmartSearch from './components/SmartSearch'
 import { useState, useEffect } from 'react'
+import { usePlayer } from './lib/usePlayer' // ИМПОРТ 1: Подключаем стор
+import { locales } from './lib/locales'     // ИМПОРТ 2: Подключаем словарь
 
 function HomeContent() {
   const [releases, setReleases] = useState<any[]>([])
@@ -19,6 +21,16 @@ function HomeContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const searchParams = useSearchParams();
   const [isAdmin, setIsAdmin] = useState(false)
+
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Достаем текущий язык из глобального Zustand-стора
+  const { language } = usePlayer();
+  const t = locales[language as 'ru' | 'en' || 'en'];
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -78,7 +90,6 @@ function HomeContent() {
       const tracksWithCover = data.map(t => ({ ...t, cover_url: release.cover_url }));
       setTracks(tracksWithCover);
     } else if (release.release_type === 'single' || !release.release_type) {
-      // Обновили условие проверки на сингл
       setTracks([release]);
     }
   };
@@ -87,12 +98,17 @@ function HomeContent() {
 
   return (
     <main className="min-h-screen bg-[#050505] text-zinc-100 pb-32">
+      {/* Если внутри Hero.tsx тоже есть английский (например, Personal Discography) — мы передадим туда t позже */}
       <Hero />
 
       <div className="px-8 mt-12">
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-2xl font-bold tracking-tight">
-            {isSearching ? "Результаты поиска" : "Recent Releases"}
+            {/* ЕСЛИ НЕ ПРИМОНТИРОВАНО — ВЫВОДИМ ДЕФОЛТ, ИНАЧЕ ИЗ СЛОВАРЯ */}
+            {!isMounted
+              ? (isSearching ? "Search Results" : "Recent Releases")
+              : (isSearching ? (t.searchResults || "Результаты поиска") : t.recentReleases)
+            }
           </h2>
 
           <div className="flex items-center gap-4">
@@ -105,7 +121,8 @@ function HomeContent() {
 
               <input
                 type="text"
-                placeholder="Search tracks or releases..."
+                /* МЕНЯЕМ ПЛЕЙСХОЛДЕР ПОИСКА */
+                placeholder={isMounted ? t.searchPlaceholder : "Search tracks or releases..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{ paddingLeft: '44px' }}
@@ -125,7 +142,7 @@ function HomeContent() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
             {releases?.map((release, index) => (
               <TrackItem
-                key={release.id || index}
+                key={`home-grid-release-item-idx-${index}-${release.id || 'no-id'}`}
                 release={release}
                 index={index}
                 onClick={() => handleOpenRelease(release)}
@@ -136,6 +153,7 @@ function HomeContent() {
       </div>
 
       <ReleaseModal
+        key={selectedRelease?.id ? `active-release-modal-${selectedRelease.id}` : 'initial-empty-release-modal'}
         release={selectedRelease}
         tracks={tracks}
         isOpen={isModalOpen}
@@ -147,8 +165,9 @@ function HomeContent() {
 }
 
 export default function Home() {
+  // Достаем язык для глобального фоллбэка загрузки Suspense
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#050505] flex items-center justify-center text-zinc-500 font-bold tracking-widest text-xs uppercase animate-pulse">Loading...</div>}>
       <HomeContent />
     </Suspense>
   )

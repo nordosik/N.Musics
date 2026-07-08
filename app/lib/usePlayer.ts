@@ -7,10 +7,12 @@ interface Track {
   title: string;
   audio_url: string;
   cover_url?: string;
-  release_type?: 'single' | 'ep' | 'album'; 
+  release_type?: 'single' | 'ep' | 'album';
   release_id?: string;
   duration: number;
   lyrics?: string;
+  is_ecosystem?: boolean;
+  is_hot?: boolean;
 }
 
 interface PlayerStore {
@@ -22,11 +24,11 @@ interface PlayerStore {
   isLyricsOpen: boolean
   repeatMode: RepeatMode
   isShuffle: boolean
-  
+
   // Состояния громкости
   volume: number
   prevVolume: number
-  
+
   // Кэш скролла текстов
   lyricsScrollPositions: Record<string | number, number>
 
@@ -35,7 +37,7 @@ interface PlayerStore {
   setActiveTrack: (track: Track) => void
   setQueue: (tracks: Track[], index?: number) => void
   setIsPlaying: (playing: boolean) => void
-  
+
   // Экшены громкости
   setVolume: (value: number) => void
   setPrevVolume: (value: number) => void
@@ -43,13 +45,19 @@ interface PlayerStore {
 
   // Экшены кэша скролла
   setLyricsScrollPosition: (trackId: string | number, position: number) => void
-  
+
   // Логика воспроизведения
   playNext: (isAutoEnded?: boolean) => void
   playPrevious: () => void
+  currentTime: number
+  setCurrentTime: (time: number) => void
   togglePlay: () => void
   toggleRepeat: () => void
   toggleShuffle: () => void
+
+  // UX Локализация (Добавляем сюда)
+  language: 'ru' | 'en'
+  toggleLanguage: () => void
 }
 
 // Вспомогательная функция для честного перемешивания массива (Фишер-Йетс)
@@ -71,16 +79,24 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
   isLyricsOpen: false,
   repeatMode: 'off',
   isShuffle: false,
-  
+
   // Дефолтные значения громкости
   volume: 1,
   prevVolume: 1,
-  
+
   // Дефолтный кэш скролла
   lyricsScrollPositions: {},
 
+  // И ДУБЛИРУЙ СЮДА ДЕФОЛТНОЕ ВРЕМЯ:
+  currentTime: 0,
+
+  // 1. Дефолтное значение языка с безопасной проверкой на SSR (Next.js)
+  language: typeof window !== 'undefined' ? (localStorage.getItem('n-musics-lang') as 'ru' | 'en' || 'en') : 'en',
+
   setIsLyricsOpen: (open) => set({ isLyricsOpen: open }),
-  
+
+  setCurrentTime: (time) => set({ currentTime: time }),
+
   setActiveTrack: (track: Track) => set({
     activeTrack: track,
     isPlaying: true,
@@ -91,7 +107,7 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
 
   setVolume: (value) => set({ volume: value }),
   setPrevVolume: (value) => set({ prevVolume: value }),
-  
+
   toggleMute: () => {
     const { volume, prevVolume, setVolume } = get();
     if (volume > 0) {
@@ -134,18 +150,18 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
 
   playNext: (isAutoEnded = false) => {
     const { queue, originalQueue, activeTrack, currentIndex, repeatMode, isShuffle } = get();
-    
+
     if (isAutoEnded && repeatMode === 'one') {
       return;
     }
-    
+
     if (!isAutoEnded && repeatMode === 'one' && queue.length === 1) {
       const current = activeTrack;
       set({ activeTrack: null, isPlaying: false });
       setTimeout(() => set({ activeTrack: current, isPlaying: true }), 30);
       return;
     }
-    
+
     const isLastTrack = currentIndex === queue.length - 1;
     if (!isLastTrack) {
       const nextIndex = currentIndex + 1;
@@ -201,7 +217,7 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
 
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
-  
+
   toggleRepeat: () => set((state) => {
     const nextModes: Record<RepeatMode, RepeatMode> = { off: 'one', one: 'all', all: 'off' };
     const nextMode = nextModes[state.repeatMode];
@@ -248,5 +264,14 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
         currentIndex: originalIdx !== -1 ? originalIdx : 0
       };
     }
+  }),
+
+  // 2. Добавляем экшен переключения языка в самый конец стора
+  toggleLanguage: () => set((state) => {
+    const nextLang = state.language === 'en' ? 'ru' : 'en';
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('n-musics-lang', nextLang);
+    }
+    return { language: nextLang };
   }),
 }))
