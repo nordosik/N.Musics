@@ -10,26 +10,26 @@ import React, { useRef, useEffect, useState } from 'react'
 
 export default function Player() {
   // 1. Вытаскиваем все глобальные стейты, включая language и toggleLanguage
-  const {
-    activeTrack,
-    isPlaying,
-    setIsPlaying,
-    playNext,
-    playPrevious,
-    isLyricsOpen,
-    setIsLyricsOpen,
-    isShuffle,
-    toggleShuffle,
-    repeatMode,
-    toggleRepeat,
-    volume,
-    setVolume,
-    prevVolume,
-    toggleMute,
-    language,
-    toggleLanguage,
-    setCurrentTime: setGlobalCurrentTime
-  } = usePlayer();
+  const activeTrack = usePlayer(state => state.activeTrack);
+  const isPlaying = usePlayer(state => state.isPlaying);
+  const setIsPlaying = usePlayer(state => state.setIsPlaying);
+  const playNext = usePlayer(state => state.playNext);
+  const playPrevious = usePlayer(state => state.playPrevious);
+  const isLyricsOpen = usePlayer(state => state.isLyricsOpen);
+  const setIsLyricsOpen = usePlayer(state => state.setIsLyricsOpen);
+  const isShuffle = usePlayer(state => state.isShuffle);
+  const toggleShuffle = usePlayer(state => state.toggleShuffle);
+  const repeatMode = usePlayer(state => state.repeatMode);
+  const toggleRepeat = usePlayer(state => state.toggleRepeat);
+  const volume = usePlayer(state => state.volume);
+  const setVolume = usePlayer(state => state.setVolume);
+  const toggleMute = usePlayer(state => state.toggleMute);
+  const language = usePlayer(state => state.language);
+  const toggleLanguage = usePlayer(state => state.toggleLanguage);
+  const setLanguage = usePlayer(state => state.setLanguage);
+
+  // Самое главное: получаем только экшен для отправки времени, сам плеер за тиканьем секунд из стора больше не следит!
+  const setGlobalCurrentTime = usePlayer(state => state.setCurrentTime);
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const [currentTime, setCurrentTime] = useState(0)
@@ -38,13 +38,28 @@ export default function Player() {
   // ЗАЩИТА ОТ РАССИНХРОНИЗАЦИИ:
   const [isMounted, setIsMounted] = useState(false);
 
-  // Этот эффект сработает СТРОГО в браузЕре после полной загрузки страницы
+  // Этот эффект сработает СТРОГО в браузере после полной загрузки страницы
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   // Переменная перевода интерфейса
   const t = locales[language as 'ru' | 'en' || 'en'];
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Безопасно вытаскиваем сохраненную языковую метку из браузера
+      const savedLang = localStorage.getItem('n-musics-lang') as 'ru' | 'en';
+
+      if (savedLang && (savedLang === 'ru' || savedLang === 'en')) {
+        setLanguage(savedLang);
+      } else {
+        // Если юзер зашел впервые — намертво фиксируем дефолтный 'ru'
+        localStorage.setItem('n-musics-lang', 'ru');
+        setLanguage('ru');
+      }
+    }
+  }, [setLanguage]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -94,24 +109,21 @@ export default function Player() {
   }, [isPlaying, setIsPlaying, volume, setVolume, toggleMute]);
 
   useEffect(() => {
-    localStorage.setItem('player_volume', volume.toString());
     if (audioRef.current) {
       audioRef.current.volume = volume;
     }
+    localStorage.setItem('player_volume', volume.toString());
   }, [volume]);
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = volume;
-    }
     if (isPlaying) {
       audioRef.current?.play().catch(() => {
-        setIsPlaying(false)
-      })
+        setIsPlaying(false);
+      });
     } else {
-      audioRef.current?.pause()
+      audioRef.current?.pause();
     }
-  }, [isPlaying, activeTrack, setIsPlaying, volume]);
+  }, [isPlaying, activeTrack, setIsPlaying]);
 
   const onTimeUpdate = () => {
     if (audioRef.current) {

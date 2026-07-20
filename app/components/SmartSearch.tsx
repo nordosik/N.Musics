@@ -16,9 +16,12 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
     const [releases, setReleases] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(false)
 
-    const { activeTrack, isPlaying, setQueue, setIsPlaying } = usePlayer();
+    const activeTrack = usePlayer(state => state.activeTrack);
+    const isPlaying = usePlayer(state => state.isPlaying);
+    const setQueue = usePlayer(state => state.setQueue);
+    const setIsPlaying = usePlayer(state => state.setIsPlaying);
+    const language = usePlayer(state => state.language);
 
-    const { language } = usePlayer();
     const t = locales[language as 'ru' | 'en' || 'en'];
 
     useEffect(() => {
@@ -119,17 +122,17 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                                 // (сверяем по полю release_id трека и названию релиза)
                                 const isCurrentRelease = (activeTrack?.release_id === release.title || activeTrack?.title === release.title) && isPlaying;
 
-                                // ВСТАВЛЯЕМ СЮДА (Функция быстрого старта музыки для поиска):
+                                // Функция быстрого старта музыки для поиска
                                 const handleQuickPlay = async (e: React.MouseEvent) => {
-                                    e.stopPropagation(); // Блокируем открытие релиза
+                                    e.stopPropagation();
 
-                                    // Если этот релиз уже активен — переключаем паузу/плей
-                                    if (isCurrentRelease) {
+                                    // Если этот релиз уже загружен в плеер — мгновенно переключаем Play/Pause БЕЗ запросов к базе
+                                    if (activeTrack && (activeTrack.id === release.id || activeTrack.release_id === release.title || activeTrack.title === release.title)) {
                                         setIsPlaying(!isPlaying);
                                         return;
                                     }
 
-                                    // Иначе фетчим треки из базы и запускаем
+                                    // Запрос в Supabase отправляется ТОЛЬКО если включается абсолютно новый релиз
                                     const { data: releaseTracks } = await supabase
                                         .from('tracks')
                                         .select('*')
@@ -155,16 +158,16 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                                         onClick={() => onReleaseClick(release)}
                                         /* СУРОВЫЙ КИБЕРПАНК: Подсветка карточек в поиске в тон маркерам */
                                         className={`p-4 rounded-xl cursor-pointer transition-all duration-500 group border flex flex-col h-full ${isCurrentRelease
-                                                ? isEcosystem
-                                                    ? 'bg-emerald-950/20 border-emerald-400 text-white shadow-[0_0_25px_rgba(52,211,153,0.35),inset_0_0_15px_rgba(52,211,153,0.15)] scale-[1.02]'
-                                                    : isHot
-                                                        ? 'bg-red-950/20 border-red-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.35),inset_0_0_15px_rgba(239,68,68,0.15)] scale-[1.02]'
-                                                        : 'bg-zinc-800/20 border-white text-white shadow-[0_0_25px_rgba(255,255,255,0.2),inset_0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]'
-                                                : isEcosystem
-                                                    ? 'bg-zinc-900/30 border-emerald-500/20 text-zinc-400 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)] hover:text-white'
-                                                    : isHot
-                                                        ? 'bg-zinc-900/30 border-red-500/20 animate-fire-glow text-zinc-400 hover:border-red-400 hover:text-white'
-                                                        : 'bg-zinc-900/30 border-zinc-800/80 text-zinc-400 hover:bg-zinc-800/30 hover:border-zinc-700 hover:text-white'
+                                            ? isEcosystem
+                                                ? 'bg-emerald-950/20 border-emerald-400 text-white shadow-[0_0_25px_rgba(52,211,153,0.35),inset_0_0_15px_rgba(52,211,153,0.15)] scale-[1.02]'
+                                                : isHot
+                                                    ? 'bg-red-950/20 border-red-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.35),inset_0_0_15px_rgba(239,68,68,0.15)] scale-[1.02]'
+                                                    : 'bg-zinc-800/20 border-white text-white shadow-[0_0_25px_rgba(255,255,255,0.2),inset_0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]'
+                                            : isEcosystem
+                                                ? 'bg-zinc-900/30 border-emerald-500/20 text-zinc-400 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)] hover:text-white'
+                                                : isHot
+                                                    ? 'bg-zinc-900/30 border-red-500/20 animate-fire-glow text-zinc-400 hover:border-red-400 hover:text-white'
+                                                    : 'bg-zinc-900/30 border-zinc-800/80 text-zinc-400 hover:bg-zinc-800/30 hover:border-zinc-700 hover:text-white'
                                             }`}
                                     >
                                         <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden relative shadow-md mb-4 flex items-center justify-center">
@@ -172,7 +175,12 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                                                 <img
                                                     src={release.cover_url}
                                                     alt={release.title}
-                                                    className={`w-full h-full object-cover transition-transform duration-500 ${isCurrentRelease ? 'scale-105' : 'group-hover:scale-105'}`}
+                                                    className={`w-full h-full object-cover transition-transform duration-500 ${isCurrentRelease ? 'scale-105' : 'group-hover:scale-105'} transform-gpu will-change-transform`}
+                                                    style={{
+                                                        imageRendering: 'auto',
+                                                        backfaceVisibility: 'hidden',
+                                                        WebkitBackfaceVisibility: 'hidden'
+                                                    }}
                                                 />
                                             ) : (
                                                 <Music className="text-zinc-600" size={32} />

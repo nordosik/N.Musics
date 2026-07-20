@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { X, Plus, Music, Image as ImageIcon, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -21,7 +21,7 @@ export default function UploadModal() {
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const { language } = usePlayer();
+  const language = usePlayer(state => state.language);
   const t = locales[language as 'ru' | 'en' || 'en'];
 
   const [isMounted, setIsMounted] = useState(false);
@@ -49,30 +49,21 @@ export default function UploadModal() {
   /**
    * 📐 Автоматический валидатор типа релиза по правилам площадок
    */
-  const getReleaseType = (): 'single' | 'ep' | 'album' => {
+  // Оборачиваем в useMemo: расчет сработает ТОЛЬКО если изменилось количество треков или файлы внутри них
+  const releaseType = useMemo(() => {
     const validTracks = tracks.filter(t => t.file !== null)
     const trackCount = validTracks.length
-
-    // Считаем общую длительность только тех треков, которые уже загружены в инпуты
     const totalDurationSec = validTracks.reduce((sum, t) => sum + (t.duration || 0), 0)
     const totalDurationMin = totalDurationSec / 60
-
-    // Проверяем, есть ли хоть один трек длиннее 10 минут (600 секунд)
     const hasLongTrack = validTracks.some(t => (t.duration || 0) > 600)
 
-    // 1. АЛЬБОМ (LP)
     if (trackCount >= 7) return 'album'
     if (trackCount > 0 && totalDurationMin > 30) return 'album'
-
-    // 2. EP (Мини-альбом)
     if (trackCount >= 4 && trackCount <= 6 && totalDurationMin <= 30) return 'ep'
     if (trackCount >= 1 && trackCount <= 3 && hasLongTrack && totalDurationMin <= 30) return 'ep'
 
-    // 3. СИНГЛ (Single)
     return 'single'
-  }
-
-  const releaseType = getReleaseType()
+  }, [tracks]);
 
   const handleUpload = async () => {
     // Валидация: название релиза и хотя бы один заполненный трек
@@ -301,7 +292,7 @@ export default function UploadModal() {
                   ))}
 
                   <button
-                    onClick={() => setTracks([...tracks, { id: Math.random().toString(), title: '', file: null, duration: null }])}
+                    onClick={() => setTracks([...tracks, { id: `track-upload-id-${Date.now()}`, title: '', file: null, duration: null }])}
                     className="w-full py-2 border border-dashed border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors"
                   >
                     {t.addTrackBtn}

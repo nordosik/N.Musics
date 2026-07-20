@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, memo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePlayer } from '../../lib/usePlayer'
 import { ChevronLeft, Share2, Clock, Play, Pause, Music, X } from 'lucide-react'
@@ -13,8 +13,13 @@ export default function ReleasePage() {
   const [release, setRelease] = useState<any>(null)
   const [tracks, setTracks] = useState<any[]>([])
 
-  // ДОБАВИЛИ ИМПОРТ isLyricsOpen ИЗ НАШЕГО ZUSTAND СТОРА
-  const { activeTrack, isPlaying, setIsPlaying, setQueue, isLyricsOpen, language } = usePlayer()
+  const activeTrack = usePlayer(state => state.activeTrack);
+  const isPlaying = usePlayer(state => state.isPlaying);
+  const setIsPlaying = usePlayer(state => state.setIsPlaying);
+  const setQueue = usePlayer(state => state.setQueue);
+  const isLyricsOpen = usePlayer(state => state.isLyricsOpen);
+  const language = usePlayer(state => state.language);
+
   const t = locales[language as 'ru' | 'en' || 'en'];
 
   // Защита от Hydration Mismatch на динамическом роуте
@@ -32,6 +37,17 @@ export default function ReleasePage() {
     window.dispatchEvent(new CustomEvent('toggle-player', { detail: newState }))
   }
 
+  const TrackListEqualizer = memo(() => {
+    return (
+      <div className="flex items-end gap-[2px] h-3 pointer-events-none isolate transform-gpu">
+        <span className="w-[2px] h-3 bg-white block animate-[pulse_0.6s_infinite_alternate]" />
+        <span className="w-[2px] h-2 bg-white block animate-[pulse_0.8s_infinite_alternate]" />
+        <span className="w-[2px] h-3 bg-white block animate-[pulse_0.7s_infinite_alternate]" />
+      </div>
+    );
+  });
+  TrackListEqualizer.displayName = 'TrackListEqualizer';
+
   useEffect(() => {
     const fetchReleaseData = async () => {
       const { data: relData } = await supabase.from('releases').select('*').eq('id', id).single()
@@ -43,6 +59,16 @@ export default function ReleasePage() {
     }
     fetchReleaseData()
   }, [id])
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    if (copied) {
+      timeoutId = setTimeout(() => setCopied(false), 2000);
+    }
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [copied]);
 
   if (!release) return null
 
@@ -103,7 +129,7 @@ export default function ReleasePage() {
               </button>
 
               <button
-                onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                onClick={() => { navigator.clipboard.writeText(window.location.href); setCopied(true); }}
                 className="text-zinc-500 hover:text-white transition-colors"
               >
                 {copied ? <div className="text-[10px] font-bold">{t.copiedUpper}</div> : <Share2 size={24} />}
@@ -138,16 +164,16 @@ export default function ReleasePage() {
                     onClick={() => { setQueue(tracks, i); setIsPlaying(true); }}
                     /* УЛЬТИМАТИВНЫЙ НЕОНОВЫЙ ИНТЕРФЕЙС СТРАНИЦЫ РЕЛИЗА */
                     className={`group flex items-center justify-between p-4 rounded-lg my-2 mx-0.5 cursor-pointer transition-all duration-300 relative border ${isCurrentTrackPlaying
-                        ? isEcosystemTrack
-                          ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.35),inset_0_0_12px_rgba(52,211,153,0.15)] scale-[1.01]'
-                          : isHotNew
-                            ? 'bg-red-950/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35),inset_0_0_12px_rgba(239,68,68,0.15)] scale-[1.01]'
-                            : 'bg-white/5 border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)] scale-[1.01]'
-                        : isEcosystemTrack
-                          ? 'bg-zinc-900/10 border-emerald-500/10 hover:border-emerald-500/30'
-                          : isHotNew
-                            ? 'bg-zinc-900/10 border-red-500/10 animate-fire-glow hover:border-red-500/30'
-                            : 'bg-transparent border-transparent hover:bg-white/[0.02]'
+                      ? isEcosystemTrack
+                        ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.35),inset_0_0_12px_rgba(52,211,153,0.15)] scale-[1.01]'
+                        : isHotNew
+                          ? 'bg-red-950/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35),inset_0_0_12px_rgba(239,68,68,0.15)] scale-[1.01]'
+                          : 'bg-white/5 border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)] scale-[1.01]'
+                      : isEcosystemTrack
+                        ? 'bg-zinc-900/10 border-emerald-500/10 hover:border-emerald-500/30'
+                        : isHotNew
+                          ? 'bg-zinc-900/10 border-red-500/10 animate-fire-glow hover:border-red-500/30'
+                          : 'bg-transparent border-transparent hover:bg-white/[0.02]'
                       }`}
                   >
                     {/* ЛЕВАЯ ЧАСТЬ: Номер/Эквалайзер + Название + Локализованные саб-лайны */}
@@ -155,11 +181,7 @@ export default function ReleasePage() {
                       {/* 1. Индекс трека или живой эквалайзер */}
                       <span className="w-6 flex items-center justify-center text-[12px] font-mono flex-shrink-0">
                         {isCurrentTrackPlaying ? (
-                          <div className="flex items-end gap-[2px] h-3">
-                            <span className="w-[2px] h-3 bg-white block animate-[pulse_0.6s_infinite_alternate]" />
-                            <span className="w-[2px] h-2 bg-white block animate-[pulse_0.8s_infinite_alternate]" />
-                            <span className="w-[2px] h-3 bg-white block animate-[pulse_0.7s_infinite_alternate]" />
-                          </div>
+                          <TrackListEqualizer />
                         ) : (
                           <span className={isCurrent ? "text-white font-bold" : "text-zinc-600 group-hover:text-zinc-400 transition-colors"}>
                             {i + 1}

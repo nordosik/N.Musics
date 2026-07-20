@@ -58,6 +58,7 @@ interface PlayerStore {
   // UX Локализация (Добавляем сюда)
   language: 'ru' | 'en'
   toggleLanguage: () => void
+  setLanguage: (lang: 'ru' | 'en') => void
 }
 
 // Вспомогательная функция для честного перемешивания массива (Фишер-Йетс)
@@ -91,7 +92,7 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
   currentTime: 0,
 
   // 1. Дефолтное значение языка с безопасной проверкой на SSR (Next.js)
-  language: typeof window !== 'undefined' ? (localStorage.getItem('n-musics-lang') as 'ru' | 'en' || 'en') : 'en',
+  language: 'ru',
 
   setIsLyricsOpen: (open) => set({ isLyricsOpen: open }),
 
@@ -178,6 +179,11 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
           setTimeout(() => set({ activeTrack: current, isPlaying: true }), 30);
         } else if (isShuffle) {
           const currentTrack = queue[currentIndex];
+          // Если трека почему-то нет в очереди, просто гасим плеер во избежание краша приложения
+          if (!currentTrack) {
+            set({ isPlaying: false });
+            return;
+          }
           const freshlyShuffled = shuffleArray(originalQueue, currentTrack.id);
           const newQueue = [currentTrack, ...freshlyShuffled];
           set({
@@ -274,4 +280,5 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
     }
     return { language: nextLang };
   }),
+  setLanguage: (lang) => set({ language: lang }), // Намертво внедряем экшен установки стейта языка
 }))

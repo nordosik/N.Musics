@@ -1,7 +1,7 @@
 "use client";
 
 import { Download, Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, memo } from "react";
 import { usePlayer } from "../lib/usePlayer";
 import { locales } from "../lib/locales";
 
@@ -16,8 +16,22 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ url, fileName, isMini, 
   const [status, setStatus] = useState<"idle" | "downloading" | "success">("idle");
 
   // Достаем текущий язык из Zustand
-  const { language } = usePlayer();
+  const language = usePlayer(state => state.language);
   const t = locales[(language as 'ru' | 'en') || 'en'];
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
+    if (status === "success") {
+      timeoutId = setTimeout(() => {
+        setStatus("idle");
+      }, 2000);
+    }
+    
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [status]);
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -42,7 +56,6 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ url, fileName, isMini, 
 
       // UX: Включаем статус успеха на 2 секунды
       setStatus("success");
-      setTimeout(() => setStatus("idle"), 2000);
     } catch (error) {
       console.error("Ошибка загрузки:", error);
       // Запасной вариант
@@ -55,7 +68,7 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ url, fileName, isMini, 
   const isSuccess = status === "success";
 
   // Динамические неоновые тени под стиль N.Musics
-  const neonShadowClass = isHot 
+  const neonShadowClass = isHot
     ? "shadow-[0_0_15px_rgba(239,68,68,0.5)] border-red-500/50 text-red-400" // Алый неон для HOT
     : "shadow-[0_0_15px_rgba(16,185,129,0.5)] border-emerald-500/50 text-emerald-400"; // Изумрудный для обычных
 
@@ -102,7 +115,7 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ url, fileName, isMini, 
       {status === "idle" && (
         <Download size={16} className="text-zinc-400 group-hover:text-white transition-colors" />
       )}
-      
+
       <span>
         {isDownloading && (t.downloading || "Загрузка...")}
         {isSuccess && (t.downloadSuccess || "Готово!")}
@@ -112,4 +125,4 @@ const DownloadButton: React.FC<DownloadButtonProps> = ({ url, fileName, isMini, 
   );
 };
 
-export default DownloadButton;
+export default memo(DownloadButton);

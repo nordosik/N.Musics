@@ -10,6 +10,29 @@ import DownloadButton from "./DownloadButton"
 import JSZip from 'jszip'
 import React, { memo } from 'react'
 
+// Микро-анализатор обложки: сжимает картинку до 1х1 пикселя в Canvas и вытаскивает средний цвет
+const getAverageColor = (imgElement: HTMLImageElement): string => {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 'rgba(255,255,255,0.12)';
+
+    canvas.width = 1;
+    canvas.height = 1;
+
+    // Рисуем картинку размером 1x1 пиксель, браузер автоматически её усреднит
+    ctx.drawImage(imgElement, 0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+
+    // Возвращаем готовый цвет с мягкой прозрачностью для красивого свечения
+    return `rgba(${r}, ${g}, ${b}, 0.45)`;
+  } catch (e) {
+    // Если картинка загрузилась с другого домена без CORS, отдаем красивый дефолт
+    return 'rgba(255,255,255,0.12)';
+  }
+};
+
+
 export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin }: any) {
   const { setQueue, activeTrack, isPlaying, togglePlay, setIsPlaying, language } = usePlayer()
   const [copied, setCopied] = useState(false)
@@ -18,6 +41,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
   const [commentaryText, setCommentaryText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
+  const [detectedGlow, setDetectedGlow] = useState('rgba(255,255,255,0.12)')
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -34,14 +58,14 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
   }, [release]);
 
   useEffect(() => {
+    let scrollTimeout: NodeJS.Timeout;
     if (isOpen) {
       window.dispatchEvent(new CustomEvent('toggle-player', { detail: true }));
     } else {
       window.dispatchEvent(new CustomEvent('toggle-player', { detail: false }));
       const savedScroll = parseInt(document.body.getAttribute('data-scroll-y') || '0', 10);
-
       if (savedScroll > 0) {
-        setTimeout(() => {
+        scrollTimeout = setTimeout(() => {
           window.scrollTo({
             top: savedScroll,
             behavior: 'auto'
@@ -65,6 +89,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
       window.dispatchEvent(new CustomEvent('toggle-player', { detail: false }));
       document.documentElement.style.overflow = '';
       document.body.style.overflow = '';
+      if (scrollTimeout) clearTimeout(scrollTimeout); // Железная зачистка таймера
     };
   }, [isOpen, isDownloadOpen, isCommentaryOpen]);
 
@@ -121,6 +146,11 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
   const isThisReleasePlaying = isPlaying && tracks.some((t: any) => t.id === activeTrack?.id)
   const isMultiTrack = release.release_type === 'album' || release.release_type === 'ep'
 
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <AnimatePresence mode="wait">
       {isOpen && (
@@ -158,18 +188,47 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
 
                 <div
                   onClick={() => release.cover_url && setIsLightboxOpen(true)}
-                  className="w-44 h-44 md:w-52 md:h-52 shadow-2xl rounded-sm overflow-hidden bg-zinc-900 flex-shrink-0 cursor-zoom-in group/cover relative flex items-center justify-center"
+                  style={{
+                    ['--release-glow' as any]: detectedGlow
+                  }}
+                  className="w-44 h-44 md:w-52 md:h-52 rounded-xl bg-zinc-900 flex-shrink-0 cursor-zoom-in group/cover relative flex items-center justify-center transition-all duration-500 ease-out transform hover:scale-[1.04] hover:-translate-y-1"
                 >
-                  {release.cover_url ? (
-                    <img src={release.cover_url} className="w-full h-full object-cover transition-transform group-hover/cover:scale-105" alt="" />
-                  ) : (
-                    <>{isMultiTrack ? (
-                      <svg className="text-zinc-600 w-16 h-16 animate-[spin_8s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-                    ) : (
-                      <svg className="text-zinc-600 w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-                    )}</>
+                  {/* Умная тень-хамелеон: подстраивается под обложку, плавно разгорается при наведении */}
+                  {release.cover_url && (
+                    <div
+                      className="absolute inset-0 rounded-xl opacity-70 blur-xl group-hover/cover:opacity-95 transition-all duration-500 scale-100 pointer-events-none -z-10 will-change-[opacity]"
+                      style={{
+                        backgroundColor: 'var(--release-glow)'
+                      }}
+                    />
                   )}
-                  {release.cover_url && <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center"><Maximize2 size={24} className="text-white" /></div>}
+
+                  {/* Контейнер обложки БЕЗ серых рамок */}
+                  <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl relative z-10 bg-zinc-950">
+                    {release.cover_url ? (
+                      <img
+                        src={release.cover_url}
+                        crossOrigin="anonymous" // Позволяет читать цвета, если картинки летят из Supabase Storage
+                        className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover/cover:scale-[1.02] transform-gpu will-change-transform"
+                        style={{
+                          imageRendering: 'auto',
+                          backfaceVisibility: 'hidden',
+                          WebkitBackfaceVisibility: 'hidden'
+                        }}
+                        alt={release.title}
+                        onLoad={(e) => {
+                          const color = getAverageColor(e.currentTarget);
+                          setDetectedGlow(color);
+                        }}
+                      />
+                    ) : (
+                      <>{isMultiTrack ? (
+                        <svg className="text-zinc-600 w-16 h-16 animate-[spin_8s_linear_infinite]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                      ) : (
+                        <svg className="text-zinc-600 w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                      )}</>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex flex-col justify-end items-start text-left flex-1 min-w-0 min-h-full isolate will-change-transform">
@@ -267,37 +326,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
                     >
                       <span className="flex items-center justify-center text-sm font-mono flex-shrink-0 w-[30px]">
                         {isNowPlaying ? (
-                          /* Контейнер эквалайзера с фиксированной высотой h-3.5 */
-                          <div className="flex items-end gap-[2.5px] h-3.5 relative overflow-hidden pb-[1px] pointer-events-none isolate">
-                            <motion.div
-                              initial={{ scaleY: 0.3 }}
-                              animate={{ scaleY: [0.3, 1, 0.5, 0.9, 0.3] }}
-                              transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
-                              style={{ originY: "bottom" }}
-                              className="w-[2px] h-full bg-white rounded-t-[1px]"
-                            />
-                            <motion.div
-                              initial={{ scaleY: 0.6 }}
-                              animate={{ scaleY: [0.6, 0.2, 0.9, 0.4, 0.6] }}
-                              transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
-                              style={{ originY: "bottom" }}
-                              className="w-[2px] h-full bg-white rounded-t-[1px]"
-                            />
-                            <motion.div
-                              initial={{ scaleY: 0.4 }}
-                              animate={{ scaleY: [0.4, 0.9, 0.3, 0.7, 0.4] }}
-                              transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
-                              style={{ originY: "bottom" }}
-                              className="w-[2px] h-full bg-white rounded-t-[1px]"
-                            />
-                            <motion.div
-                              initial={{ scaleY: 0.2 }}
-                              animate={{ scaleY: [0.2, 0.7, 0.4, 0.9, 0.2] }}
-                              transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
-                              style={{ originY: "bottom" }}
-                              className="w-[2px] h-full bg-white rounded-t-[1px]"
-                            />
-                          </div>
+                          <EqualizerIcon />
                         ) : (
                           <span className={isCurrentTrack ? "text-white font-bold" : "text-zinc-600 group-hover:text-zinc-400 transition-colors"}>
                             {i + 1}
@@ -343,7 +372,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
             </div>
 
             {/* МЕНЕДЖЕР ЗАГРУЗОК ЧЕРЕЗ ПОРТАЛ */}
-            {typeof window !== 'undefined' && createPortal(
+            {isMounted && createPortal(
               <AnimatePresence>
                 {isDownloadOpen && isMultiTrack && (
                   <div key="download-manager-wrapper" className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -452,11 +481,11 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
                   </div>
                 )}
               </AnimatePresence>,
-              document.body // Телепортируем модалку прямиком в body!
+              document.body
             )}
 
             {/* МЕНЕДЖЕР ИСТОРИЙ ЧЕРЕЗ ПОРТАЛ */}
-            {typeof window !== 'undefined' && createPortal(
+            {isMounted && createPortal(
               <AnimatePresence>
                 {isCommentaryOpen && (
                   <div key="commentary-manager-wrapper" className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -496,7 +525,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks, isAdmin
                   </div>
                 )}
               </AnimatePresence>,
-              document.body // Телепортируем историю в body!
+              document.body
             )}
           </motion.div>
         </div>
@@ -600,5 +629,41 @@ const ActionButtons = memo(({ handleShare, copied, isMultiTrack, isDownloadOpen,
     </div>
   )
 })
+
+const EqualizerIcon = memo(() => {
+  return (
+    <div className="flex items-end gap-[2.5px] h-3.5 relative overflow-hidden pb-[1px] pointer-events-none isolate">
+      <motion.div
+        initial={{ scaleY: 0.3 }}
+        animate={{ scaleY: [0.3, 1, 0.5, 0.9, 0.3] }}
+        transition={{ repeat: Infinity, duration: 1.1, ease: "easeInOut" }}
+        style={{ originY: "bottom" }}
+        className="w-[2px] h-full bg-white rounded-t-[1px]"
+      />
+      <motion.div
+        initial={{ scaleY: 0.6 }}
+        animate={{ scaleY: [0.6, 0.2, 0.9, 0.4, 0.6] }}
+        transition={{ repeat: Infinity, duration: 0.9, ease: "easeInOut" }}
+        style={{ originY: "bottom" }}
+        className="w-[2px] h-full bg-white rounded-t-[1px]"
+      />
+      <motion.div
+        initial={{ scaleY: 0.4 }}
+        animate={{ scaleY: [0.4, 0.9, 0.3, 0.7, 0.4] }}
+        transition={{ repeat: Infinity, duration: 1.3, ease: "easeInOut" }}
+        style={{ originY: "bottom" }}
+        className="w-[2px] h-full bg-white rounded-t-[1px]"
+      />
+      <motion.div
+        initial={{ scaleY: 0.2 }}
+        animate={{ scaleY: [0.2, 0.7, 0.4, 0.9, 0.2] }}
+        transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+        style={{ originY: "bottom" }}
+        className="w-[2px] h-full bg-white rounded-t-[1px]"
+      />
+    </div>
+  );
+});
+EqualizerIcon.displayName = 'EqualizerIcon';
 
 ActionButtons.displayName = 'ActionButtons'

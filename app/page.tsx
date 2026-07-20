@@ -29,7 +29,7 @@ function HomeContent() {
   }, []);
 
   // Достаем текущий язык из глобального Zustand-стора
-  const { language } = usePlayer();
+  const language = usePlayer(state => state.language);
   const t = locales[language as 'ru' | 'en' || 'en'];
 
   useEffect(() => {
@@ -71,6 +71,11 @@ function HomeContent() {
   }, [isModalOpen]);
 
   const handleOpenRelease = async (release: any) => {
+    // Если эта модалка уже открыта для этого же релиза — просто прерываем выполнение, ничего не перезапрашивая
+    if (isModalOpen && selectedRelease?.id === release.id) {
+      return;
+    }
+
     setSelectedRelease(release);
     setIsModalOpen(true);
     setTracks([]);

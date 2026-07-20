@@ -1,7 +1,7 @@
 'use client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePlayer } from '../lib/usePlayer'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { Save, Edit3, Eye } from 'lucide-react'
 import { locales } from '../lib/locales'
@@ -35,7 +35,46 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
 
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
+  const [isUserScrolling, setIsUserScrolling] = useState(false);
+
   const t = locales[language as 'ru' | 'en' || 'en'];
+
+  // Кэшируем распарсенные строки — теперь они не пересчитываются каждую секунду!
+  const parsedLines = useMemo(() => {
+    return parseLyrics(activeTrack?.lyrics || '');
+  }, [activeTrack?.lyrics]);
+
+  const hasTimings = useMemo(() => parsedLines.some(l => l.isTimed), [parsedLines]);
+
+  // Рассчитываем activeIndex без циклов внутри рендера
+  const activeIndex = useMemo(() => {
+    if (!hasTimings) return -1;
+    let idx = -1;
+    for (let i = 0; i < parsedLines.length; i++) {
+      if (parsedLines[i].isTimed && currentTime >= parsedLines[i].time) {
+        idx = i;
+      }
+    }
+    return idx;
+  }, [parsedLines, hasTimings, currentTime]);
+
+  // Изолированный, бритвенно-точный автоскролл БЕЗ таймаутов в рендере
+  useEffect(() => {
+    if (activeIndex !== -1 && !isUserScrolling && !isEditing && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const activeEl = container.querySelector(`[data-lyrics-idx="${activeIndex}"]`) as HTMLElement;
+
+      if (activeEl) {
+        // Рассчитываем идеальное положение: верхний край строки минус половина высоты контейнера плюс половина высоты самой строки
+        const targetScroll = activeEl.offsetTop - (container.clientHeight / 2) + (activeEl.clientHeight / 2);
+
+        container.scrollTo({
+          top: targetScroll,
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, [activeIndex, isUserScrolling, isEditing]);
 
   useEffect(() => {
     setIsClient(true)
@@ -72,8 +111,6 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
       setLyricsScrollPosition(activeTrack.id, currentScroll);
     }
   };
-
-  const [isUserScrolling, setIsUserScrolling] = useState(false);
 
   if (!isClient) return null
 
@@ -163,7 +200,7 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className={`relative z-10 w-full max-w-6xl h-full flex flex-col px-6 md:px-8 text-white pb-36 ${hasNoLyrics && !isEditing ? 'justify-center items-center' : 'justify-start pt-24'}`}
+            className={`relative z-10 w-full max-w-7xl h-full flex flex-col px-4 text-white pb-36 ${hasNoLyrics && !isEditing ? 'justify-center items-center' : 'justify-start pt-24'}`}
           >
             {isEditing && isAdmin ? (
               <div className="w-full flex-1 flex flex-col gap-4">
@@ -190,9 +227,10 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
                 onScroll={handleScroll}
                 onWheel={() => { if (!isEditing) setIsUserScrolling(true); }}
                 onTouchMove={() => { if (!isEditing) setIsUserScrolling(true); }}
-                className={`overflow-y-auto custom-scrollbar text-center selection:bg-white selection:text-black w-full ${hasNoLyrics ? 'flex items-center justify-center' : 'flex-1 pr-2'}`}
+                // Увеличили ширину рабочей зоны, убрав жесткое сдавливание по бокам
+                className={`overflow-y-auto overflow-x-hidden custom-scrollbar text-center selection:bg-white selection:text-black w-full px-4 md:px-8 ${hasNoLyrics ? 'flex items-center justify-center' : 'flex-1'}`}
               >
-                <div className={`flex flex-col w-full ${hasNoLyrics ? 'gap-y-3' : 'gap-y-6 py-6'}`}>
+                <div className={`flex flex-col w-full ${hasNoLyrics ? 'gap-y-3' : 'gap-y-2 py-10'}`}>
                   {(() => {
                     // ФИКС: Если текста реально нет — сразу жестко рендерим заглушку по центру экрана, не запуская парсер
                     if (hasNoLyrics) {
@@ -208,9 +246,6 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
                       );
                     }
 
-                    const parsedLines = parseLyrics(activeTrack?.lyrics || '');
-                    const hasTimings = parsedLines.some(l => l.isTimed);
-
                     // Находим текущую активную строку на основе времени из usePlayer
                     let activeIndex = -1;
                     if (hasTimings) {
@@ -219,16 +254,6 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
                           activeIndex = i;
                         }
                       }
-                    }
-
-                    // Хук авто-центрирования активной строки на экране
-                    if (typeof window !== 'undefined' && activeIndex !== -1 && !isUserScrolling) {
-                      setTimeout(() => {
-                        const activeEl = scrollContainerRef.current?.querySelector(`[data-lyrics-idx="${activeIndex}"]`);
-                        if (activeEl && !isEditing) {
-                          activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                      }, 100);
                     }
 
                     return parsedLines.map((lineObj: any, i: number) => {
@@ -240,29 +265,39 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
                           key={i}
                           data-lyrics-idx={i}
                           onClick={() => {
-                            // Если у строки есть тайминг и мы не в режиме редактирования
                             if (lineObj.isTimed && !isEditing) {
-                              // Находим наш аудио-элемент на странице и прокручиваем время
                               const audioElement = document.querySelector('audio');
                               if (audioElement) {
                                 audioElement.currentTime = lineObj.time;
-                                // Возвращаем автоцентрирование, так как пользователь сам ткнул в строку
                                 setIsUserScrolling(false);
                               }
                             }
                           }}
-                          className={`transition-all duration-500 text-center block w-full break-words font-black uppercase tracking-normal leading-tight select-none px-4
-                            ${isHeader
-                              ? 'text-zinc-600 text-xs md:text-sm tracking-[0.4em] mt-6 first:mt-0 opacity-60'
-                              : 'text-xl sm:text-2xl md:text-[clamp(24px,3.5vw,42px)]'
-                            }
-                          `}
+                          // Уменьшили py-3 до py-1, чтобы убрать лишние пустые километры между строками
+                          className={`transition-all duration-300 text-center block w-full break-words font-black uppercase tracking-tight leading-tight select-none px-4 py-4 transform-gpu`}
                           style={{
-                            // Старые и будущие строки плавно затухают, активная горит белым на 100%
-                            opacity: isHeader ? 0.6 : (hasTimings ? (isActive ? 1 : 0.25) : 0.4),
-                            transform: isActive ? 'scale(1.05)' : 'scale(1)',
-                            color: isActive ? '#ffffff' : isHeader ? '#52525b' : '#71717a',
-                            transition: 'all 0.4s ease-out'
+                            // Если строка активна — 100% видимость. Если таймингов нет вообще — даем сочные 0.8. Если идет караоке — держим читаемые 0.45 для фона
+                            opacity: isActive
+                              ? 1
+                              : isHeader
+                                ? 0.5
+                                : hasTimings
+                                  ? 0.45
+                                  : 0.8,
+
+                            transform: isActive ? 'scale(1.03)' : 'scale(1)',
+
+                            // Подсвечиваем неактивный текст мягким светлым оттенком вместо глухого темного серого
+                            color: isActive
+                              ? '#ffffff'
+                              : isHeader
+                                ? '#71717a'
+                                : '#9ca3af', // Качественный матовый белый цвет Zinc/Gray-400
+                            // cubic-bezier(0.25, 1, 0.5, 1) — это классический плавный easeOut, который убирает "желейность" при движении
+                            transition: 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
+                            WebkitBoxDecorationBreak: 'clone',
+                            boxDecorationBreak: 'clone',
+                            fontSize: isHeader ? '14px' : 'clamp(28px, 4.2vw, 46px)'
                           }}
                         >
                           {lineObj.text}
@@ -275,7 +310,7 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
             )}
           </motion.div>
           <AnimatePresence>
-            {isUserScrolling && (
+            {hasTimings && isUserScrolling && (
               <motion.button
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

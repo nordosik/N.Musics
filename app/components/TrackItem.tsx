@@ -12,9 +12,11 @@ interface TrackItemProps {
 }
 
 export default function TrackItem({ release, index, onClick }: TrackItemProps) {
-  const { isPlaying, activeTrack, setQueue, setIsPlaying } = usePlayer()
-
-  const { language } = usePlayer()
+  const isPlaying = usePlayer(state => state.isPlaying)
+  const activeTrack = usePlayer(state => state.activeTrack)
+  const setQueue = usePlayer(state => state.setQueue)
+  const setIsPlaying = usePlayer(state => state.setIsPlaying)
+  const language = usePlayer(state => state.language)
   const t = locales[language as 'ru' | 'en' || 'en']
 
   // Проверка: играет ли сейчас этот конкретный релиз
@@ -40,13 +42,13 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
   const handleQuickPlay = async (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Если этот релиз уже активен — просто переключаемplay/pause на лету
-    if (isCurrentActive) {
+    // Если этот релиз уже играет — просто переключаем play/pause БЕЗ запросов к Supabase
+    if (activeTrack && (activeTrack.id === release.id || activeTrack.release_id === release.id || activeTrack.release_id === release.title)) {
       setIsPlaying(!isPlaying);
       return;
     }
 
-    // Если играет другой релиз или музыка выключена — загружаем этот релиз
+    // Если играет вообще другой релиз — только тогда делаем запрос
     const { data: releaseTracks } = await supabase
       .from('tracks')
       .select('*')
@@ -99,7 +101,12 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
         {release.cover_url ? (
           <img
             src={release.cover_url}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 transform-gpu will-change-transform"
+            style={{
+              imageRendering: 'auto',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden'
+            }}
             alt={release.title}
           />
         ) : (
