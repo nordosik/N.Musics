@@ -160,19 +160,20 @@ function HomeContent() {
     if (sortBy === 'newest') return b.id - a.id;
     if (sortBy === 'oldest') return a.id - b.id;
 
-    // 2. Сортировка по КОЛИЧЕСТВУ ТРЕКОВ (строго по столбцу tracks_count из БД)
+    // 2. Сортировка по КОЛИЧЕСТВУ ТРЕКОВ (считаем длины вложенных массивов треков)
     if (sortBy === 'tracks_max' || sortBy === 'tracks_min') {
-      const countA = Number(a.tracks_count) || 0;
-      const countB = Number(b.tracks_count) || 0;
+      const countA = a.tracks?.length ?? a.tracks_count ?? a.release_tracks?.length ?? 0;
+      const countB = b.tracks?.length ?? b.tracks_count ?? b.release_tracks?.length ?? 0;
 
-      if (countA === countB) return b.id - a.id; // Если поровну, свежие выше
+      if (countA === countB) return b.id - a.id; // Если треков поровну, свежие выше
       return sortBy === 'tracks_max' ? countB - countA : countA - countB;
     }
 
-    // 3. Сортировка по ДЛИТЕЛЬНОСТИ РЕЛИЗА (строго по столбцу duration из БД)
+    // 3. Сортировка по ДЛИТЕЛЬНОСТИ РЕЛИЗА
     if (sortBy === 'duration_max' || sortBy === 'duration_min') {
-      const durA = Number(a.duration) || 0;
-      const durB = Number(b.duration) || 0;
+      // Если duration у релиза 0 или null, считаем сумму секунд прямо из его треков
+      const durA = Number(a.duration) || (a.tracks || []).reduce((acc: number, t: any) => acc + (Number(t.duration) || 0), 0);
+      const durB = Number(b.duration) || (b.tracks || []).reduce((acc: number, t: any) => acc + (Number(t.duration) || 0), 0);
 
       if (durA === durB) return b.id - a.id;
       return sortBy === 'duration_max' ? durB - durA : durA - durB;
