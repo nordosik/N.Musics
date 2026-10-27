@@ -109,12 +109,11 @@ function HomeContent() {
             lyrics: t.lyrics || ''
           }));
 
-        const trackCollabs = sortedTracks.length > 0 ? (sortedTracks[0].collaborators || '') : '';
-
         return {
           ...release,
           tracks: sortedTracks,
-          collaborators: release.collaborators || trackCollabs
+          // Теперь мы берем ТОЛЬКО то, что указано в шапке релиза. Если пусто — значит пусто.
+          collaborators: release.collaborators || null
         };
       });
 
@@ -189,7 +188,7 @@ function HomeContent() {
       {/* Если внутри Hero.tsx тоже есть английский (например, Personal Discography) — мы передадим туда t позже */}
       <Hero />
 
-      <div className="px-8 mt-12">
+      <div className="px-8 mt-12 flex flex-col">
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-6">
             <h2 className="text-2xl font-bold tracking-tight">
@@ -270,66 +269,68 @@ function HomeContent() {
         <AnimatePresence mode="wait">
           {isMounted && isFilterPanelOpen && !isSearching && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="mb-8 p-5 bg-zinc-900/30 border border-zinc-800/80 rounded-xl font-mono text-xs flex flex-wrap gap-8 items-center justify-between"
+              initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+              animate={{ opacity: 1, height: 'auto', marginBottom: 32 }} // 32 это mb-8
+              exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+              className="overflow-hidden w-full"
             >
-              {/* Секция 1: Формат релиза */}
-              <div className="flex flex-col gap-2.5">
-                <span className="text-zinc-500 font-bold tracking-widest text-[10px] uppercase">
-                  {t.filterFormatLabel || "ФОРМАТ"}
-                </span>
-                <div className="flex gap-2">
-                  {[
-                    { key: 'all', label: t.filterAll || 'ВСЕ РЕЛИЗЫ' },
-                    { key: 'album', label: t.album || 'АЛЬБОМ' },
-                    { key: 'ep', label: t.ep || 'EP' },
-                    { key: 'single', label: t.single || 'СИНГЛ' }
-                  ].map(type => {
-                    const isActive = activeType === type.key;
-                    return (
-                      <motion.button
-                        key={type.key}
-                        whileHover={{ scale: 1.02, borderColor: isActive ? "#52525b" : "#3f3f46" }}
-                        whileTap={{ scale: 0.98 }}
-                        transition={{ duration: 0.12 }}
-                        onClick={() => setActiveType(type.key)}
-                        className={`h-9 px-4 border rounded-lg font-medium uppercase tracking-wider text-[11px] ${isActive
-                          ? 'border-zinc-600 text-white bg-zinc-800'
-                          : 'border-zinc-800/60 text-zinc-500 bg-transparent'
-                          }`}
-                      >
-                        {type.label}
-                      </motion.button>
-                    );
-                  })}
+              <div className="p-5 bg-zinc-900/30 border border-zinc-800/80 rounded-xl font-mono text-xs flex flex-wrap gap-8 items-center justify-between">
+                {/* Секция 1: Формат релиза */}
+                <div className="flex flex-col gap-2.5">
+                  <span className="text-zinc-500 font-bold tracking-widest text-[10px] uppercase">
+                    {t.filterFormatLabel || "ФОРМАТ"}
+                  </span>
+                  <div className="flex gap-2">
+                    {[
+                      { key: 'all', label: t.filterAll || 'ВСЕ РЕЛИЗЫ' },
+                      { key: 'album', label: t.album || 'АЛЬБОМ' },
+                      { key: 'ep', label: t.ep || 'EP' },
+                      { key: 'single', label: t.single || 'СИНГЛ' }
+                    ].map(type => {
+                      const isActive = activeType === type.key;
+                      return (
+                        <motion.button
+                          key={type.key}
+                          whileHover={{ scale: 1.02, borderColor: isActive ? "#52525b" : "#3f3f46" }}
+                          whileTap={{ scale: 0.98 }}
+                          transition={{ duration: 0.12 }}
+                          onClick={() => setActiveType(type.key)}
+                          className={`h-9 px-4 border rounded-lg font-medium uppercase tracking-wider text-[11px] ${isActive
+                            ? 'border-zinc-600 text-white bg-zinc-800'
+                            : 'border-zinc-800/60 text-zinc-500 bg-transparent'
+                            }`}
+                        >
+                          {type.label}
+                        </motion.button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              {/* Секция 2: Кастомный мягкий селектор сортировки */}
-              <div className="flex flex-col gap-2.5 min-w-[220px]">
-                <span className="text-zinc-500 font-bold tracking-widest text-[10px] uppercase">
-                  {t.filterSortLabel || "СОРТИРОВКА"}
-                </span>
-                <div className="relative">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full h-9 bg-zinc-900/60 text-zinc-300 border border-zinc-800 rounded-lg px-3 pr-8 outline-none font-medium uppercase tracking-wider text-[11px] appearance-none focus:border-zinc-700 cursor-pointer transition-all"
-                  >
-                    <option value="newest" className="bg-zinc-950">{t.sortNewest || 'СНАЧАЛА СВЕЖИЕ'}</option>
-                    <option value="oldest" className="bg-zinc-950">{t.sortOldest || 'СНАЧАЛА СТАРЫЕ'}</option>
-                    <option value="tracks_max" className="bg-zinc-950">{t.sortTracksMax || 'ПО УБЫВАНИЮ ТРЕКОВ'}</option>
-                    <option value="tracks_min" className="bg-zinc-950">{t.sortTracksMin || 'ПО ВОЗРАСТАНИЮ ТРЕКОВ'}</option>
-                    <option value="duration_max" className="bg-zinc-950">{t.sortDurationMax || 'СНАЧАЛА ДЛИННЫЕ'}</option>
-                    <option value="duration_min" className="bg-zinc-950">{t.sortDurationMin || 'СНАЧАЛА КОРОТКИЕ'}</option>
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-500">
-                    <svg className="fill-current h-4 w-4" viewBox="0 0 20 20">
-                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                    </svg>
+                {/* Секция 2: Кастомный мягкий селектор сортировки */}
+                <div className="flex flex-col gap-2.5 min-w-[220px]">
+                  <span className="text-zinc-500 font-bold tracking-widest text-[10px] uppercase">
+                    {t.filterSortLabel || "СОРТИРОВКА"}
+                  </span>
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="w-full h-9 bg-zinc-900/60 text-zinc-300 border border-zinc-800 rounded-lg px-3 pr-8 outline-none font-medium uppercase tracking-wider text-[11px] appearance-none focus:border-zinc-700 cursor-pointer transition-all"
+                    >
+                      <option value="newest" className="bg-zinc-950">{t.sortNewest || 'СНАЧАЛА СВЕЖИЕ'}</option>
+                      <option value="oldest" className="bg-zinc-950">{t.sortOldest || 'СНАЧАЛА СТАРЫЕ'}</option>
+                      <option value="tracks_max" className="bg-zinc-950">{t.sortTracksMax || 'ПО УБЫВАНИЮ ТРЕКОВ'}</option>
+                      <option value="tracks_min" className="bg-zinc-950">{t.sortTracksMin || 'ПО ВОЗРАСТАНИЮ ТРЕКОВ'}</option>
+                      <option value="duration_max" className="bg-zinc-950">{t.sortDurationMax || 'СНАЧАЛА ДЛИННЫЕ'}</option>
+                      <option value="duration_min" className="bg-zinc-950">{t.sortDurationMin || 'СНАЧАЛА КОРОТКИЕ'}</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-zinc-500">
+                      <svg className="fill-current h-4 w-4" viewBox="0 0 20 20">
+                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -343,15 +344,22 @@ function HomeContent() {
             onReleaseClick={handleOpenRelease}
           />
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-            {filteredReleases.map((release, index) => (
-              <TrackItem
-                key={`home-grid-release-item-idx-${index}-${release.id || 'no-id'}`}
-                release={release}
-                index={index}
-                onClick={() => handleOpenRelease(release)}
-              />
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 transition-all duration-300 ease-in-out">
+            {filteredReleases.map((release, index) => {
+              // Ищем ID самого последнего релиза среди ВСЕХ загруженных релизов (до фильтрации)
+              const latestReleaseId = releases.length > 0 ? Math.max(...releases.map(r => Number(r.id))) : null;
+              const isLatest = Number(release.id) === latestReleaseId;
+
+              return (
+                <TrackItem
+                  key={`home-grid-release-item-idx-${index}-${release.id || 'no-id'}`}
+                  release={release}
+                  index={index}
+                  onClick={() => handleOpenRelease(release)}
+                  isLatest={isLatest} // <--- Передаем честный флаг
+                />
+              );
+            })}
           </div>
         )}
       </div>

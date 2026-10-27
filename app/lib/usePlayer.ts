@@ -45,6 +45,7 @@ interface PlayerStore {
   currentTime: number
   language: 'ru' | 'en'
   listenTimeoutId: NodeJS.Timeout | null
+  activeReleaseId: string | number | null
 
   setIsLyricsOpen: (open: boolean) => void
   setActiveTrack: (track: Track) => void
@@ -135,6 +136,7 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
   currentTime: 0,
   language: 'ru',
   listenTimeoutId: null,
+  activeReleaseId: null,
 
   setIsLyricsOpen: (open) => set({ isLyricsOpen: open }),
   setCurrentTime: (time) => set({ currentTime: time }),
@@ -168,13 +170,25 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
   setQueue: (tracks: Track[], index = 0) => {
     const { isShuffle } = get();
     const selectedTrack = tracks[index];
+    if (!selectedTrack) return;
+
+    // Сохраняем ID релиза, из которого запущен трек
+    const releaseId = selectedTrack.release_id || null;
+
+    // ПРИНУДИТЕЛЬНО берем обложку из трека (она уже подтянута из правильного релиза при клике)
+    const trackWithContext = {
+      ...selectedTrack,
+      cover_url: selectedTrack.cover_url || selectedTrack.cover_url, // Оставляем как есть
+    };
+
     if (isShuffle && tracks.length > 1) {
       const shuffledRemaining = shuffleArray(tracks, selectedTrack.id);
       set({
         originalQueue: tracks,
-        queue: [selectedTrack, ...shuffledRemaining],
+        queue: [trackWithContext, ...shuffledRemaining],
         currentIndex: 0,
-        activeTrack: selectedTrack,
+        activeTrack: trackWithContext,
+        activeReleaseId: releaseId,
         isPlaying: true
       });
     } else {
@@ -182,7 +196,8 @@ export const usePlayer = create<PlayerStore>((set, get) => ({
         originalQueue: tracks,
         queue: tracks,
         currentIndex: index,
-        activeTrack: tracks[index],
+        activeTrack: trackWithContext,
+        activeReleaseId: releaseId,
         isPlaying: true
       });
     }

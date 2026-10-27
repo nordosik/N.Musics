@@ -1,5 +1,5 @@
 'use client'
-import { Play, Music, Disc, Pause } from 'lucide-react'
+import { Play, Music, Disc, Pause, Flame } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { usePlayer } from '../lib/usePlayer'
 import { locales } from '../lib/locales'
@@ -9,35 +9,24 @@ interface TrackItemProps {
   release: any;
   index: number;
   onClick: () => void;
+  isLatest?: boolean;
 }
 
-export default function TrackItem({ release, index, onClick }: TrackItemProps) {
+export default function TrackItem({ release, index, onClick, isLatest }: TrackItemProps) {
   const isPlaying = usePlayer(state => state.isPlaying)
   const activeTrack = usePlayer(state => state.activeTrack)
   const setQueue = usePlayer(state => state.setQueue)
   const setIsPlaying = usePlayer(state => state.setIsPlaying)
   const language = usePlayer(state => state.language)
+  const activeReleaseId = usePlayer(state => state.activeReleaseId)
   const t = locales[language as 'ru' | 'en' || 'en']
 
-  // Проверка: играет ли сейчас этот конкретный релиз
+  // Проверяем, что играет ИМЕННО этот релиз, а не просто трек с таким же ID
   const isCurrentActive = !!(
     isPlaying &&
     activeTrack &&
-    (
-      // 1. Прямые совпадения ID
-      activeTrack.id === release.id ||
-      activeTrack.release_id === release.id ||
-
-      // 2. Совпадения по названию релиза (от модалки или плеера)
-      activeTrack.release_id === release.title ||
-      activeTrack.release_title === release.title ||
-
-      // 3. Проверка: принадлежит ли активный трек списку треков этого релиза
-      (Array.isArray(release.tracks) && release.tracks.some((t: any) => t.id === activeTrack.id)) ||
-
-      // 4. Фоллбэк для синглов по названию
-      activeTrack.title === release.title
-    )
+    activeReleaseId &&
+    String(activeReleaseId) === String(release.id)
   );
 
   // Функция для мгновенного запуска первого трека релиза без открытия модалки
@@ -98,8 +87,10 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
     visible: { opacity: 1, y: 0 }
   };
 
-  const isEcosystem = release.is_ecosystem
-  const isHot = release.is_hot
+  const isEcosystem = false; // Релизы больше не имеют этого статуса
+
+  // Теперь "Новинка" — это строго самый последний релиз на главной странице
+  const isHot = isLatest;
 
   return (
     <motion.div
@@ -109,16 +100,16 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
       viewport={{ once: true, amount: 0.01 }}
       variants={variants}
       transition={{ duration: 0.5, ease: "easeOut", delay: index * 0.05 }}
-      className={`group cursor-pointer p-4 rounded-md transition-all duration-500 border-2 box-border flex flex-col h-auto ${isCurrentActive
+      className={`group cursor-pointer p-4 rounded-md transition-all duration-300 ease-in-out border box-border flex flex-col h-auto ${isCurrentActive
         ? isEcosystem
           ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.35),inset_0_0_15px_rgba(52,211,153,0.15)] scale-[1.02]'
           : isHot
-            ? 'bg-red-950/20 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.35),inset_0_0_15px_rgba(239,68,68,0.15)] scale-[1.02]'
+            ? 'bg-cyan-950/20 border-cyan-300 shadow-[0_0_25px_rgba(34,211,238,0.3),inset_0_0_15px_rgba(34,211,238,0.15)] scale-[1.02]' // Состояние 3: Активен (жирная обводка)
             : 'bg-zinc-800/80 border-white shadow-[0_0_25px_rgba(255,255,255,0.2),inset_0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]'
         : isEcosystem
-          ? 'bg-zinc-900/40 border-emerald-500/30 shadow-[0_0_12px_rgba(52,211,153,0.05)] hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)]'
+          ? 'bg-zinc-900/40 border-emerald-500/40 shadow-[0_0_12px_rgba(52,211,153,0.05)] hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)]'
           : isHot
-            ? 'bg-zinc-900/40 border-red-500/30 shadow-[0_0_12px_rgba(239,68,68,0.05)] hover:border-red-400 hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]'
+            ? 'bg-zinc-900/40 border-cyan-500/30 hover:border-cyan-400/60 hover:shadow-[0_0_15px_rgba(34,211,238,0.1)]' // Состояние 1: Пассив (слабая, но заметная), Состояние 2: Ховер (чуть жирнее и с тенью)
             : 'bg-zinc-900/40 border-transparent hover:bg-zinc-800/60'
         }`}
     >
@@ -171,11 +162,13 @@ export default function TrackItem({ release, index, onClick }: TrackItemProps) {
         </p>
 
         {isEcosystem && (
-          <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399,0_0_4px_#34d399]" />
+          <span className="text-[8px] font-black px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.15)] flex-shrink-0">
+            SINGLE
+          </span>
         )}
         {isHot && (
-          <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)]">
-            HOT
+          <span className="text-[8px] font-black px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-sm tracking-wider shadow-[0_0_10px_rgba(34,211,238,0.15)] flex-shrink-0">
+            NEW
           </span>
         )}
       </div>

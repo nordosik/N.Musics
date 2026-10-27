@@ -24,11 +24,12 @@ function parseLyrics(rawText: string) {
 }
 
 export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }) {
-  const { isLyricsOpen, setIsLyricsOpen, activeTrack, language, currentTime } = usePlayer()
+  const { isLyricsOpen, setIsLyricsOpen, activeTrack, language, currentTime, setIsPlaying } = usePlayer()
   const [isClient, setIsClient] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [lyricsText, setLyricsText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [showAdminControls, setShowAdminControls] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [isUserScrolling, setIsUserScrolling] = useState(false);
   const t = locales[language as 'ru' | 'en'] || locales.en;
@@ -68,6 +69,28 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // СБРОС СКРОЛЛА ПРИ СМЕНЕ ТРЕКА (Мгновенный прыжок наверх)
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      // 1. Отключаем плавность для мгновенного сброса
+      scrollContainerRef.current.style.scrollBehavior = 'auto';
+      // 2. Телепортируем скролл в самый верх
+      scrollContainerRef.current.scrollTop = 0;
+
+      // 3. Возвращаем плавность (через 50мс, чтобы браузер успел применить сброс)
+      const timer = setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.style.scrollBehavior = 'smooth';
+        }
+      }, 50);
+
+      // 4. ВАЖНО: Сбрасываем флаг пользовательского скролла, чтобы кнопка "Синхронизация" исчезла
+      setIsUserScrolling(false);
+
+      return () => clearTimeout(timer);
+    }
+  }, [activeTrack?.id]);
 
   useEffect(() => {
     if (activeTrack) {
@@ -133,39 +156,51 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
             <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/20 to-black/60" />
           </div>
 
-          {/* КНОПКИ УПРАВЛЕНИЯ ДЛЯ АДМИНА */}
+          {/* КНОПКИ УПРАВЛЕНИЯ ДЛЯ АДМИНА (Плавно выезжают при наведении) */}
           {isAdmin && (
-            <div className="absolute top-6 right-6 z-50 flex items-center gap-3">
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-full transition text-xs font-black uppercase tracking-widest active:scale-95 cursor-pointer"
+            <div
+              className="absolute top-0 left-0 right-0 h-24 z-50 pointer-events-none"
+              onMouseEnter={() => setShowAdminControls(true)}
+              onMouseLeave={() => setShowAdminControls(false)}
+            >
+              <motion.div
+                initial={{ y: -50, opacity: 0 }}
+                animate={{ y: showAdminControls ? 0 : -50, opacity: showAdminControls ? 1 : 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                className="absolute top-6 right-6 flex items-center gap-3 pointer-events-auto"
               >
-                {isEditing ? <Eye size={14} /> : <Edit3 size={14} />}
-                {isEditing ? t.preview : t.editLyrics}
-              </button>
-              {isEditing && (
+                {/* Твой старый код кнопок (редактировать и сохранить) */}
                 <button
-                  onClick={async () => {
-                    if (!activeTrack || !isAdmin) return
-                    setIsSaving(true)
-                    try {
-                      const { error } = await supabase.from('tracks').update({ lyrics: lyricsText }).eq('id', activeTrack.id)
-                      if (error) throw error
-                      usePlayer.setState({ activeTrack: { ...activeTrack, lyrics: lyricsText } })
-                      setIsEditing(false)
-                    } catch (e: any) {
-                      alert(`${t.saveLyricsError} ${e.message}`)
-                    } finally {
-                      setIsSaving(false)
-                    }
-                  }}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full transition text-xs font-black uppercase tracking-widest hover:bg-zinc-200 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  onClick={() => setIsEditing(!isEditing)}
+                  className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-full transition text-xs font-black uppercase tracking-widest active:scale-95 cursor-pointer backdrop-blur-md"
                 >
-                  <Save size={14} />
-                  {isSaving ? t.saving : t.save}
+                  {isEditing ? <Eye size={14} /> : <Edit3 size={14} />}
+                  {isEditing ? t.preview : t.editLyrics}
                 </button>
-              )}
+                {isEditing && (
+                  <button
+                    onClick={async () => {
+                      if (!activeTrack || !isAdmin) return
+                      setIsSaving(true)
+                      try {
+                        const { error } = await supabase.from('tracks').update({ lyrics: lyricsText }).eq('id', activeTrack.id)
+                        if (error) throw error
+                        usePlayer.setState({ activeTrack: { ...activeTrack, lyrics: lyricsText } })
+                        setIsEditing(false)
+                      } catch (e: any) {
+                        alert(`${t.saveLyricsError} ${e.message}`)
+                      } finally {
+                        setIsSaving(false)
+                      }
+                    }}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full transition text-xs font-black uppercase tracking-widest hover:bg-zinc-200 active:scale-95 disabled:opacity-50 cursor-pointer shadow-lg"
+                  >
+                    <Save size={14} />
+                    {isSaving ? t.saving : t.save}
+                  </button>
+                )}
+              </motion.div>
             </div>
           )}
 
@@ -203,7 +238,7 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
                 className={`overflow-y-auto overflow-x-hidden custom-scrollbar text-center selection:bg-white selection:text-black w-full px-4 md:px-8 ${hasNoLyrics ? 'flex items-center justify-center h-full' : 'flex-1'}`}
               >
                 {/* Симметричные отступы py-[50vh] дают первой и последней строкам встать ровно по центру */}
-                <div className={`flex flex-col w-full ${hasNoLyrics ? 'gap-y-3' : 'gap-y-6 py-[50vh]'}`}>
+                <div className={`flex flex-col w-full ${hasNoLyrics ? 'gap-y-3' : 'gap-y-6 py-[25vh]'}`}>
                   {(() => {
                     if (hasNoLyrics) {
                       return (
@@ -228,27 +263,30 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
                           data-lyrics-idx={i}
                           onClick={() => {
                             if (lineObj.isTimed && !isEditing) {
-                              const audioElement = document.querySelector('audio');
-                              if (audioElement) {
-                                audioElement.currentTime = lineObj.time;
-                                setIsUserScrolling(false);
-                              }
+                              // 1. Отправляем событие в плеер для перемотки
+                              window.dispatchEvent(new CustomEvent('seek-to-time', { detail: lineObj.time }));
+
+                              // 2. Принудительно включаем воспроизведение (если было на паузе — включится, если играло — останется играть)
+                              setIsPlaying(true);
+
+                              // 3. Сбрасываем юзер-скролл, чтобы автоскролл снова заработал
+                              setIsUserScrolling(false);
                             }
                           }}
-                          className="text-center font-black uppercase tracking-tight leading-tight block w-full break-words select-none px-4 cursor-pointer transform-gpu"
+                          className={`text-center font-black uppercase tracking-tight leading-tight block w-full break-words select-none px-4 transform-gpu ${lineObj.isTimed && !isEditing ? 'cursor-pointer' : 'cursor-default'}`}
                           style={{
                             opacity: isActive
                               ? 1
                               : isHeader
-                              ? 0.5
-                              : hasTimings
-                              ? 0.35
-                              : 0.8,
+                                ? 0.5
+                                : hasTimings
+                                  ? 0.35
+                                  : 0.8,
                             color: isActive
                               ? '#ffffff'
                               : isHeader
-                              ? '#71717a'
-                              : '#a1a1aa',
+                                ? '#71717a'
+                                : '#a1a1aa',
                             // Только opacity и color анимируются через CSS, чтобы скролл не дергался
                             transition: 'opacity 0.25s ease-out, color 0.25s ease-out',
                             fontSize: isHeader ? '14px' : 'clamp(26px, 4vw, 44px)'
@@ -266,7 +304,7 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
 
           {/* КНОПКА ВОЗВРАТА К СИНХРОНИЗАЦИИ */}
           <AnimatePresence>
-            {hasTimings && isUserScrolling && (
+            {hasTimings && isUserScrolling && activeIndex !== -1 && (
               <motion.button
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -281,6 +319,16 @@ export default function LyricsOverlay({ isAdmin = false }: { isAdmin?: boolean }
               </motion.button>
             )}
           </AnimatePresence>
+
+          {/* МИКРО-ИНДИКАТОР ПРОГРЕССА (Снизу, над плеером) */}
+          {!hasNoLyrics && activeTrack?.duration > 0 && (
+            <div className="absolute bottom-[88px] left-0 right-0 h-[2px] bg-white/5 z-50 pointer-events-none">
+              <div
+                className="h-full bg-white/40 shadow-[0_0_10px_rgba(255,255,255,0.3)] transition-all duration-100 ease-linear"
+                style={{ width: `${(currentTime / activeTrack.duration) * 100}%` }}
+              />
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>

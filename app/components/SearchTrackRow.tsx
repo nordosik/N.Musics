@@ -1,5 +1,5 @@
 'use client'
-import { Play, Music, Heart } from 'lucide-react'
+import { Play, Music, Heart, Flame } from 'lucide-react'
 import { usePlayer } from '../lib/usePlayer'
 import { motion } from 'framer-motion'
 import { useState, useEffect, useRef, memo } from 'react'
@@ -21,11 +21,13 @@ interface Track {
   release?: any
   releases?: any
   release_tracks?: any
+  release_id?: number | string
 }
 
 interface SearchTrackRowProps {
   track: Track
   allTracks: Track[]
+  query: string // <--- ДОБАВИЛИ
 }
 
 const getArtistsList = (target: any): string[] => {
@@ -41,6 +43,30 @@ const getArtistsList = (target: any): string[] => {
   }
   return [mainArtist]
 }
+
+// Функция для безопасной подсветки текста (ч/б стиль)
+const HighlightText = ({ text, query }: { text: string; query: string }) => {
+  if (!query.trim()) return <>{text}</>;
+
+  // Экранируем спецсимволы, чтобы поиск не сломался
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          // Вот тут настраиваем стиль подсветки (сделаем белый фон и черный текст для брутального контраста)
+          <span key={i} className="bg-white/20 text-white px-0.5 rounded-[2px] font-black shadow-[0_0_8px_rgba(255,255,255,0.15)]">
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+};
 
 function SearchArtistsTooltip({
   artists,
@@ -131,12 +157,13 @@ function SearchArtistsTooltip({
   )
 }
 
-function SearchTrackRow({ track, allTracks }: SearchTrackRowProps) {
+function SearchTrackRow({ track, allTracks, query }: SearchTrackRowProps) {
   const activeTrack = usePlayer((state) => state.activeTrack)
   const isPlaying = usePlayer((state) => state.isPlaying)
   const setQueue = usePlayer((state) => state.setQueue)
   const setIsPlaying = usePlayer((state) => state.setIsPlaying)
   const language = usePlayer((state) => state.language)
+  const activeReleaseId = usePlayer(state => state.activeReleaseId)
   const t = locales[language as 'ru' | 'en'] || locales.ru
 
   const [isMounted, setIsMounted] = useState(false)
@@ -144,7 +171,11 @@ function SearchTrackRow({ track, allTracks }: SearchTrackRowProps) {
     setIsMounted(true)
   }, [])
 
-  const isCurrentTrackPlaying = activeTrack?.id === track.id && isPlaying
+  const isCurrentTrackPlaying = !!(
+    activeTrack?.id === track.id &&
+    activeReleaseId &&
+    String(activeReleaseId) === String(track.release_id)
+  );
   const isSelectedTrack = activeTrack?.id === track.id
 
   const handlePlayClick = () => {
@@ -152,7 +183,7 @@ function SearchTrackRow({ track, allTracks }: SearchTrackRowProps) {
       setIsPlaying(!isPlaying)
     } else {
       const idx = allTracks.findIndex((t) => t.id === track.id)
-      setQueue(allTracks, idx !== -1 ? idx : 0)
+      setQueue(allTracks as any, idx !== -1 ? idx : 0)
     }
   }
 
@@ -184,16 +215,13 @@ function SearchTrackRow({ track, allTracks }: SearchTrackRowProps) {
     <div
       onClick={handlePlayClick}
       className={`w-full h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer group border transition-all duration-300 relative ${isCurrentTrackPlaying
-          ? isEcosystem
-            ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.35)] scale-[1.01]'
-            : isHot
-              ? 'bg-red-950/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35)] scale-[1.01]'
-              : 'bg-zinc-800/40 border-zinc-700 shadow-md scale-[1.01]'
-          : isEcosystem
-            ? 'bg-zinc-900/40 border-emerald-500/20 hover:border-emerald-500/40'
-            : isHot
-              ? 'bg-zinc-900/40 border-red-500/20 hover:border-red-500/40'
-              : 'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-800/40 hover:border-zinc-700'
+        ? isEcosystem
+          ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.35)] scale-[1.01]'
+          : isHot
+            ? 'bg-red-950/20 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.35)] scale-[1.01]'
+            : 'bg-zinc-800/40 border-zinc-700 shadow-md scale-[1.01]'
+        : // ВОТ ТУТ МЫ УБРАЛИ ВСЕ ЦВЕТНЫЕ ОБВОДКИ ДЛЯ ПАУЗЫ
+        'bg-zinc-900/40 border-zinc-800/60 hover:bg-zinc-800/40 hover:border-zinc-700'
         }`}
     >
       {/* ЛЕВАЯ ЧАСТЬ */}
@@ -220,29 +248,26 @@ function SearchTrackRow({ track, allTracks }: SearchTrackRowProps) {
 
         {/* МЕТАДАННЫЕ ТРЕКА */}
         <div className="truncate flex-1 min-w-0">
-          <h4 className={`text-xs font-black tracking-wide truncate transition-colors duration-300 ${isCurrentTrackPlaying ? 'text-white' : 'text-zinc-400 group-hover:text-white'
-            }`}>
-            {track.title}
+          <h4 className={`text-xs font-black tracking-wide truncate transition-colors duration-300 ${isCurrentTrackPlaying ? 'text-white' : 'text-zinc-400 group-hover:text-white'}`}>
+            <HighlightText text={track.title} query={query} />
           </h4>
           <div className="flex items-center mt-0.5 text-[9px] font-bold select-none min-w-0">
             <SearchArtistsTooltip artists={getArtistsList(track)} isSelectedTrack={isSelectedTrack} t={t} />
-            {isEcosystem && (
-              <>
-                <span className="text-zinc-600 mx-1 font-normal flex-shrink-0">•</span>
-                <span className="text-[9px] font-black tracking-widest text-emerald-500/80 flex-shrink-0">
-                  {isMounted ? t.singleReleaseNotice || 'Single' : 'Single'}
-                </span>
-              </>
-            )}
           </div>
         </div>
       </div>
 
       {/* ПРАВАЯ ЧАСТЬ */}
       <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-4 flex-shrink-0 relative z-20">
-        {isEcosystem && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />}
+        {/* Маркеры показываем только если трек играет ИЛИ он выбран, чтобы не пропадали совсем */}
+        {isEcosystem && (
+          <span className="text-[8px] font-black px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.15)] flex-shrink-0">
+            SINGLE
+          </span>
+        )}
         {isHot && (
-          <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/40">
+          <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-hot-glow flex-shrink-0">
+            <Flame size={10} className="fill-red-400" />
             HOT
           </span>
         )}

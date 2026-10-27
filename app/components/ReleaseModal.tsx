@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom' // Подключили порталы
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Pause, X, Maximize2, Share2, Download, BookOpen, Save, Heart } from 'lucide-react'
+import { Play, Pause, X, Maximize2, Share2, Download, BookOpen, Save, Heart, Trash2, Flame } from 'lucide-react'
 import { usePlayer } from '../lib/usePlayer'
 import { supabase } from '../lib/supabase'
 import { locales } from '../lib/locales'
@@ -151,8 +151,11 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
   const [isCommentaryOpen, setIsCommentaryOpen] = useState(false)
   const [commentaryText, setCommentaryText] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const activeReleaseId = usePlayer(state => state.activeReleaseId)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [detectedGlow, setDetectedGlow] = useState('rgba(255,255,255,0.12)')
+  const [isZipping, setIsZipping] = useState(false)
 
   const parseCollaborators = (target: any): string[] => {
     const mainArtist = 'NORDOSIK';
@@ -251,7 +254,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
 
   if (!release) return null
 
-  // Если треки переданы внутри объекта release_tracks (через новую промежуточную таблицу)
+  // Собираем треки из пропсов (они уже загружены на главной или в поиске)
   const tracks = (
     Array.isArray(release?.release_tracks) && release.release_tracks.length > 0
       ? [...release.release_tracks]
@@ -261,7 +264,6 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
           return {
             ...trackData,
             lyrics: trackData.lyrics || item.lyrics || '',
-            // Гарантируем, что хоть одно из полей ссылок будет заполнено
             audio_url: trackData.audio_url || trackData.song_path || trackData.file_url || release?.audio_url || '',
             song_path: trackData.song_path || trackData.audio_url || trackData.file_url || ''
           };
@@ -273,6 +275,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
     cover_url: track.cover_url || release?.cover_url || release?.cover,
     lyrics: track.lyrics || '',
     release_title: release?.title,
+    release_id: release?.id,
     audio_url: track.audio_url || track.song_path || track.file_url || release?.audio_url || '',
     song_path: track.song_path || track.audio_url || track.file_url || ''
   }));
@@ -324,6 +327,73 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
     } catch (e: any) { alert(`Error saving: ${e.message}`) } finally { setIsSaving(false) }
   }
 
+  const handleDeleteRelease = async () => {
+    if (!isAdmin) return;
+
+    const confirmMessage = language === 'ru'
+      ? 'Ты точно хочешь удалить этот релиз? Все треки, связи и артисты будут удалены нахуй без возможности восстановления!'
+      : 'Are you sure you want to delete this release? All tracks, links, and artists will be deleted forever!';
+
+    if (!window.confirm(confirmMessage)) return;
+
+    setIsDeleting(true);
+    try {
+      // 1. Находим все треки, которые принадлежат этому релизу
+      const { data: tracksToDelete } = await supabase
+        .from('tracks')
+        .select('id')
+        .eq('release_id', release.id);
+
+      const trackIds = tracksToDelete?.map(t => t.id) || [];
+
+      if (trackIds.length > 0) {
+        // 2. Удаляем связи этих треков с артистами
+        await supabase
+          .from('track_collaborators')
+          .delete()
+          .in('track_id', trackIds);
+
+        // 3. Удаляем сами треки из таблицы tracks
+        await supabase
+          .from('tracks')
+          .delete()
+          .in('id', trackIds);
+      }
+
+      // 4. Удаляем связи релиза с треками
+      await supabase
+        .from('release_tracks')
+        .delete()
+        .eq('release_id', release.id);
+
+      // 5. Удаляем связи релиза с артистами
+      await supabase
+        .from('release_collaborators')
+        .delete()
+        .eq('release_title', release.title);
+
+      // 6. Удаляем сам релиз
+      const { error: relError } = await supabase
+        .from('releases')
+        .delete()
+        .eq('id', release.id);
+
+      if (relError) throw relError;
+
+      // 7. ВЫЗЫВАЕМ НАШУ SQL-ФУНКЦИЮ ДЛЯ ОЧИСТКИ ПУСТЫХ АРТИСТОВ
+      await supabase.rpc('cleanup_orphan_artists');
+
+      // 8. Закрываем модалку и перезагружаем страницу
+      onClose();
+      window.location.reload();
+
+    } catch (e: any) {
+      alert(`Ошибка удаления: ${e.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const isThisReleasePlaying = isPlaying && !!activeTrack && (
     activeTrack.release_id === release.id ||
     tracks.some((t: any) => t.id === activeTrack.id || t.title === activeTrack.title)
@@ -359,7 +429,26 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
             className="relative w-full max-w-4xl bg-zinc-950/95 backdrop-blur-xl border border-zinc-800/50 rounded-2xl shadow-2xl flex flex-col mb-10 isolate"
           >
             {!isDownloadOpen && !isCommentaryOpen && (
-              <div className="absolute top-6 right-6 z-50 flex items-center gap-3">
+              <div className="absolute top-6 right-6 z-50 flex items-center gap-4">
+
+                {/* КНОПКА УДАЛЕНИЯ (ТОЛЬКО ДЛЯ АДМИНА) - КОМПАКТНАЯ ИКОНКА */}
+                {isAdmin && (
+                  <motion.button
+                    onClick={handleDeleteRelease}
+                    disabled={isDeleting}
+                    whileHover={{ scale: 1.1, color: "#ef4444", backgroundColor: "rgba(239, 68, 68, 0.1)" }}
+                    whileTap={{ scale: 0.9 }}
+                    title={language === 'ru' ? "Удалить релиз" : "Delete release"}
+                    className="w-9 h-9 flex items-center justify-center rounded-full text-zinc-500 transition-colors disabled:opacity-50"
+                  >
+                    {isDeleting ? (
+                      <div className="w-4 h-4 border-2 border-t-transparent border-red-500 rounded-full animate-spin" />
+                    ) : (
+                      <Trash2 size={20} strokeWidth={2.5} />
+                    )}
+                  </motion.button>
+                )}
+
                 {/* Мой упругий брутальный крестик карточки релиза */}
                 <motion.button
                   onClick={onClose}
@@ -435,19 +524,13 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
                   </h1>
 
                   <div className="flex flex-wrap items-center text-[12px] font-black mb-5 text-zinc-500 max-w-full gap-y-1.5 select-none">
-                    {/* Автоматически собираем всех артистов релиза и его треков */}
+                    {/* Берем артистов СТРОГО из шапки релиза */}
                     {(() => {
-                      const allCollabs = new Set<string>();
-                      allCollabs.add('NORDOSIK');
-                      if (release?.collaborators) {
-                        parseCollaborators(release).forEach(a => allCollabs.add(a));
-                      }
-                      if (Array.isArray(tracks)) {
-                        tracks.forEach((t: any) => {
-                          parseCollaborators(t).forEach(a => allCollabs.add(a));
-                        });
-                      }
-                      const artistsList = Array.from(allCollabs);
+                      // Если в шапке релиза указаны коллабораторы, парсим их. Если нет — только NORDOSIK.
+                      const artistsList = release?.collaborators
+                        ? parseCollaborators(release)
+                        : ['NORDOSIK'];
+
                       return artistsList.map((artist: string, idx: number) => (
                         <span key={`release-header-artist-${artist}-${idx}`} className="inline-flex items-center">
                           <motion.span
@@ -523,11 +606,10 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
               <div className="space-y-1 flex-1">
                 {tracks.map((track: any, i: number) => {
                   const isCurrentTrack = !!(
-                    activeTrack && (
-                      activeTrack.id === track.id ||
-                      (activeTrack.release_id && activeTrack.release_id === release.id && activeTrack.title === track.title) ||
-                      (activeTrack.title === track.title && activeTrack.release_title === release.title)
-                    )
+                    activeTrack &&
+                    activeTrack.id === track.id &&
+                    activeReleaseId &&
+                    String(activeReleaseId) === String(release.id)
                   );
                   const isNowPlaying = isCurrentTrack && isPlaying
                   const isEcosystemTrack = track.is_ecosystem
@@ -543,17 +625,17 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
                         onClose();
                       }}
                       className={`flex items-center justify-between gap-4 p-3 group
-rounded-lg cursor-pointer transition-all duration-300 relative 
+rounded-lg cursor-pointer transition-all duration-300 ease-in-out relative 
 border ${isNowPlaying
                           ? isEcosystemTrack
                             ? 'bg-emerald-950/20 border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.3),inset_0_0_15px_rgba(52,211,153,0.1)] scale-[1.01]'
                             : isHotNew
-                              ? 'bg-red-950/20 border-red-500 shadow-[0_0_25px_rgba(239,68,68,0.3),inset_0_0_15px_rgba(239,68,68,0.1)] scale-[1.01]'
+                              ? 'bg-red-950/20 border-red-400 shadow-[0_0_25px_rgba(239,68,68,0.3),inset_0_0_15px_rgba(239,68,68,0.1)] scale-[1.01]' // Состояние 3: Играет
                               : 'bg-white/5 border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.05)] scale-[1.01]'
-                          : isEcosystemTrack
-                            ? 'bg-zinc-900/20 border-emerald-500/10 hover:border-emerald-500/30'
+                          : isEcosystemTrack && release?.release_type !== 'single'
+                            ? 'bg-zinc-900/20 border-emerald-500/30 animate-ecosystem-glow hover:border-emerald-500/60'
                             : isHotNew
-                              ? 'bg-zinc-900/20 border-red-500/10 animate-fire-glow hover:border-red-500/30'
+                              ? 'bg-zinc-900/20 border-red-500/20 hover:border-red-500/40 hover:shadow-[0_0_10px_rgba(239,68,68,0.1)]' // Пассив и Ховер (убрали старую анимацию fire-glow)
                               : 'bg-transparent border-transparent hover:bg-white/5'
                         }`}
                     >
@@ -581,20 +663,18 @@ border ${isNowPlaying
                               artists={parseCollaborators(track)}
                               isCurrentTrack={isCurrentTrack}
                             />
-                            {isEcosystemTrack && (
-                              <span className="text-[9px] uppercase font-black tracking-widest text-emerald-500/80 ml-1.5">
-                                {t.singleReleaseNotice}
-                              </span>
-                            )}
                           </div>
                         </div>
 
                         <div className="flex items-center justify-end flex-shrink-0 ml-2">
-                          {isEcosystemTrack && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399]" />
+                          {isEcosystemTrack && release?.release_type !== 'single' && (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.15)] flex-shrink-0">
+                              SINGLE
+                            </span>
                           )}
                           {isHotNew && (
-                            <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-sm tracking-widest">
+                            <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-hot-glow flex-shrink-0">
+                              <Flame size={10} className="fill-red-400" />
                               HOT
                             </span>
                           )}
@@ -686,58 +766,58 @@ border ${isNowPlaying
 
                         <button
                           onClick={async () => {
-                            const zip = new JSZip();
-
-                            // Создаем внутри архива папку с названием альбома, чтобы всё лежало аккуратно
-                            const albumFolder = zip.folder(release.title) || zip;
-
-                            for (let index = 0; index < tracks.length; index++) {
-                              const track = tracks[index];
-                              try {
-                                // Проверяем все возможные наименования полей ссылки на аудиофайл
-                                const fileUrl = track.song_path || track.audio_url || track.file_url || track.url;
-
-                                if (!fileUrl) {
-                                  console.warn(`Пропущен трек "${track.title}": нет ссылки на файл`);
-                                  continue;
-                                }
-
-                                // Скачиваем аудиофайл
-                                const response = await fetch(fileUrl);
-                                if (!response.ok) throw new Error(`Ошибка загрузки: ${response.statusText}`);
-
-                                const blob = await response.blob();
-                                const trackNumber = String(index + 1).padStart(2, '0');
-                                const fileName = `${trackNumber}. ${track.title}.mp3`;
-
-                                albumFolder.file(fileName, blob);
-                              } catch (err) {
-                                console.error(`Ошибка при архивации трека ${track.title}:`, err);
-                              }
-                            }
-
+                            if (isZipping) return;
+                            setIsZipping(true);
                             try {
-                              // 3. Упаковываем все файлы в ZIP-архив прямо в памяти браузера
-                              const content = await zip.generateAsync({ type: 'blob' });
+                              const zip = new JSZip();
+                              const albumFolder = zip.folder(release.title) || zip;
 
-                              // 4. Скачиваем готовый архив на компьютер пользователя
+                              for (let index = 0; index < tracks.length; index++) {
+                                const track = tracks[index];
+                                try {
+                                  const fileUrl = track.song_path || track.audio_url || track.file_url || track.url;
+                                  if (!fileUrl) continue;
+
+                                  const response = await fetch(fileUrl);
+                                  if (!response.ok) throw new Error(`Ошибка загрузки: ${response.statusText}`);
+                                  const blob = await response.blob();
+                                  const trackNumber = String(index + 1).padStart(2, '0');
+                                  const fileName = `${trackNumber}. ${track.title}.mp3`;
+                                  albumFolder.file(fileName, blob);
+                                } catch (err) {
+                                  console.error(`Ошибка при архивации трека ${track.title}:`, err);
+                                }
+                              }
+
+                              const content = await zip.generateAsync({ type: 'blob' });
                               const blobUrl = window.URL.createObjectURL(content);
                               const link = document.createElement('a');
                               link.href = blobUrl;
-                              link.download = `${release.title}.zip`; // Название архива — имя альбома
+                              link.download = `${release.title}.zip`;
                               document.body.appendChild(link);
                               link.click();
-
-                              // 5. Чистим за собой оперативную память
                               document.body.removeChild(link);
                               window.URL.revokeObjectURL(blobUrl);
                             } catch (err) {
                               console.error('Ошибка при генерации ZIP-архива:', err);
+                            } finally {
+                              setIsZipping(false);
                             }
                           }}
-                          className="mt-2.5 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black font-black uppercase text-[10px] tracking-widest px-5 py-2.5 rounded-xl transition hover:scale-[1.02] active:scale-98 shadow-[0_0_15px_rgba(52,211,153,0.15)]"
+                          disabled={isZipping}
+                          className="mt-2.5 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black font-black uppercase text-[10px] tracking-widest px-5 py-2.5 rounded-xl transition hover:scale-[1.02] active:scale-98 shadow-[0_0_15px_rgba(52,211,153,0.15)] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Download size={14} strokeWidth={3} /> {t.syncBtn ? (language === 'ru' ? 'Скачать весь релиз (Архив)' : 'Download Full Release (ZIP)') : 'DOWNLOAD'}
+                          {isZipping ? (
+                            <>
+                              <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                              {language === 'ru' ? 'СЖАТИЕ...' : 'ZIPPING...'}
+                            </>
+                          ) : (
+                            <>
+                              <Download size={14} strokeWidth={3} />
+                              {language === 'ru' ? 'Скачать весь релиз (Архив)' : 'Download Full Release (ZIP)'}
+                            </>
+                          )}
                         </button>
                       </div>
 
@@ -752,7 +832,7 @@ border ${isNowPlaying
                                   <span className="font-bold text-[15px] text-zinc-200 group-hover:text-white truncate tracking-tight">
                                     {track.title}
                                   </span>
-                                  <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] mt-0.5 truncate">
+                                  <span className="text-[9px] font-black text-zinc-600 tracking-[0.2em] mt-0.5 truncate">
                                     {parseCollaborators(track).join(', ')}
                                   </span>
                                 </div>

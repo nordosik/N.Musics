@@ -94,6 +94,7 @@ body.modal-open {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(200%);
   }
@@ -103,4 +104,54 @@ body.modal-open {
   100% {
     left: 125%;
   }
+}
+
+@keyframes ecosystemGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.05), inset 0 0 5px rgba(16, 185, 129, 0.02);
+    border-color: rgba(16, 185, 129, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), inset 0 0 10px rgba(16, 185, 129, 0.05);
+    border-color: rgba(16, 185, 129, 0.5);
+  }
+}
+
+.animate-ecosystem-glow {
+  animation: ecosystemGlow 3s ease-in-out infinite;
+}
+
+@keyframes cyanGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.05);
+    border-color: rgba(34, 211, 238, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+    border-color: rgba(34, 211, 238, 0.5);
+  }
+}
+
+@keyframes hotGlow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+    border-color: rgba(239, 68, 68, 0.8);
+  }
+}
+
+.animate-hot-glow {
+  animation: hotGlow 2.5s ease-in-out infinite;
 }

@@ -3,7 +3,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, memo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { usePlayer } from '../../lib/usePlayer'
-import { Share2, Clock, Play, Pause, Music, X, Heart } from 'lucide-react'
+import { Share2, Clock, Play, Pause, Music, X, Heart, Flame } from 'lucide-react'
 import { locales } from '../../lib/locales'
 import { motion } from 'framer-motion'
 
@@ -121,6 +121,7 @@ export default function ReleasePage() {
   const setQueue = usePlayer(state => state.setQueue)
   const isLyricsOpen = usePlayer(state => state.isLyricsOpen)
   const language = usePlayer(state => state.language)
+  const activeReleaseId = usePlayer(state => state.activeReleaseId)
   const openArtistModal = usePlayer(state => state.openArtistModal)
   const $t = locales[language as 'ru' | 'en'] || locales.en
 
@@ -240,7 +241,12 @@ export default function ReleasePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0c0c0e] text-white p-8 md:p-24 overflow-y-auto relative">
+    <main className={`min-h-screen text-white p-8 md:p-24 overflow-y-auto relative transition-colors duration-700 ${release.is_hot
+      ? 'bg-red-950/20'
+      : release.is_ecosystem
+        ? 'bg-emerald-950/20'
+        : 'bg-[#0c0c0e]'
+      }`}>
       {!isLyricsOpen && (
         <motion.button
           onClick={() => router.push('/')}
@@ -254,8 +260,9 @@ export default function ReleasePage() {
       )}
 
       <div className="flex flex-col lg:flex-row min-h-screen w-full relative">
+
         {/* ЛЕВАЯ КОЛОНКА */}
-        <div className="w-full lg:w-[400px] lg:fixed lg:top-0 lg:left-0 lg:bottom-0 p-12 flex flex-col justify-start z-20 bg-[#050505] md:bg-transparent">
+        <div className="w-full lg:w-[340px] lg:fixed lg:top-0 lg:left-0 lg:bottom-0 p-12 flex flex-col justify-start z-20 bg-[#050505] md:bg-transparent">
           <div className="relative w-64 h-64 mb-8 shrink-0 mt-4 group">
             <div
               className="absolute -inset-1 bg-cover bg-center blur-lg opacity-0 group-hover:opacity-30 transition-opacity duration-500 pointer-events-none rounded-2xl"
@@ -319,7 +326,7 @@ export default function ReleasePage() {
         </div>
 
         {/* ПРАВАЯ КОЛОНКА: ТРЕКЛИСТ */}
-        <div className="flex-1 lg:ml-[400px] min-h-screen flex flex-col p-6 pt-12 md:p-12 md:pt-12">
+        <div className="flex-1 lg:ml-[340px] min-h-screen flex flex-col p-6 pt-12 md:p-12 md:pt-12">
           <div className="w-full flex items-center justify-between px-2 py-3 border-b border-white/10 mb-6 shrink-0">
             <span className="text-[11px] font-black uppercase tracking-[0.4em] text-zinc-500">
               {isMounted ? $t.tracklist : 'TRACKLIST'}
@@ -327,18 +334,14 @@ export default function ReleasePage() {
             <Clock size={14} className="text-zinc-500" />
           </div>
 
-          <div className="flex-1 overflow-y-auto px-3 pr-2 custom-scrollbar overscroll-contain">
-            <div className="flex flex-col">
+          <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain">
+            <div className="flex flex-col px-4">
               {tracks.map((track, i) => {
                 const isCurrent = !!(
-                  activeTrack && (
-                    // 1. Прямое совпадение по ID трека
-                    activeTrack.id === track.id ||
-                    // 2. Если у трека есть release_id, а activeTrack.id — это ID релиза
-                    (track.release_id && activeTrack.id === track.release_id) ||
-                    // 3. Совпадение по названию трека
-                    activeTrack.title === track.title
-                  )
+                  activeTrack &&
+                  activeTrack.id === track.id &&
+                  activeReleaseId &&
+                  String(activeReleaseId) === String(release.id)
                 );
                 const isCurrentTrackPlaying = isCurrent && isPlaying;
                 const isEcosystemTrack = track.is_ecosystem
@@ -348,8 +351,14 @@ export default function ReleasePage() {
                   <div
                     key={track.id}
                     onClick={() => {
-                      setQueue(tracks, i)
-                      setIsPlaying(true)
+                      // Принудительно добавляем release_id к трекам, чтобы плеер знал контекст
+                      const tracksWithContext = tracks.map((t: any) => ({
+                        ...t,
+                        release_id: release.id,
+                        release_title: release.title
+                      }));
+                      setQueue(tracksWithContext, i);
+                      setIsPlaying(true);
                     }}
                     className={`group flex items-center justify-between p-4 rounded-lg my-2 mx-0.5 cursor-pointer transition-all duration-300 relative border ${isCurrentTrackPlaying
                       ? isEcosystemTrack
@@ -376,22 +385,32 @@ export default function ReleasePage() {
                       </span>
 
                       <div className="flex flex-col min-w-0 flex-1 justify-center">
-                        <span className={`text-sm font-black tracking-wide break-words whitespace-normal transition-colors duration-300 ${isCurrent ? 'text-white' : 'text-zinc-400 group-hover:text-white'
-                          }`}>
-                          {track.title}
-                        </span>
+                        {/* СТРОКА С НАЗВАНИЕМ И МАРКЕРАМИ */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-sm font-black tracking-wide break-words whitespace-normal transition-colors duration-300 ${isCurrent ? 'text-white' : 'text-zinc-400 group-hover:text-white'}`}>
+                            {track.title}
+                          </span>
 
+                          {isEcosystemTrack && (
+                            <span className="text-[8px] font-black px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.15)] flex-shrink-0">
+                              SINGLE
+                            </span>
+                          )}
+                          {isHotNew && (
+                            <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-hot-glow flex-shrink-0">
+                              <Flame size={10} className="fill-red-400" />
+                              HOT
+                            </span>
+                          )}
+                        </div>
+
+                        {/* СТРОКА С АРТИСТАМИ (остается под названием) */}
                         <div className="flex items-center gap-1.5 mt-0.5 min-w-0 w-full">
                           <TruncatedArtists
                             collaboratorsStr={track.collaborators}
                             openArtistModal={openArtistModal}
                             $t={$t}
                           />
-                          {isEcosystemTrack && (
-                            <span className="text-[9px] uppercase font-black tracking-widest text-emerald-500/80 truncate shrink-0">
-                              {$t.singleReleaseNotice}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -410,19 +429,14 @@ export default function ReleasePage() {
 
                     <div className="flex items-center gap-6 flex-shrink-0 pl-4">
                       <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-4">
-                        {isEcosystemTrack && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399,0_0_4px_#34d399]" />
-                        )}
-                        {isHotNew && (
-                          <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/40 rounded-sm tracking-widest">
-                            HOT
-                          </span>
-                        )}
 
-                        <button
+                        <motion.button
                           onClick={() => {
                             console.log('Лайк со страницы релиза для трека:', track.title)
                           }}
+                          whileHover={{ scale: 1.12 }}
+                          whileTap={{ scale: 0.85 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 15 }}
                           className="text-zinc-500 hover:text-white transition-colors p-1 flex items-center justify-center"
                         >
                           <Heart
@@ -430,7 +444,7 @@ export default function ReleasePage() {
                             strokeWidth={2.8}
                             className="drop-shadow-[0_0_8px_rgba(255,255,255,0.1)]"
                           />
-                        </button>
+                        </motion.button>
                       </div>
 
                       <span className={`text-[11px] font-mono w-11 text-right transition-colors ${isCurrent ? 'text-white' : 'text-zinc-600 group-hover:text-zinc-400'

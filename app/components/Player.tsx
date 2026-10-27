@@ -4,7 +4,7 @@ import { locales } from '../lib/locales'
 import { supabase } from '../lib/supabase'
 import {
   Play, Pause, Volume2, Volume1, VolumeX, Music, Disc, SkipBack,
-  SkipForward, Quote, Shuffle, Repeat, Repeat1
+  SkipForward, Quote, Shuffle, Repeat, Repeat1, Flame
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useRef, useEffect, useState } from 'react'
@@ -111,7 +111,11 @@ export default function Player() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLButtonElement // <-- ДОБАВИЛИ ЭТО
+      ) return;
       switch (e.code) {
         case 'Space':
           e.preventDefault();
@@ -197,8 +201,20 @@ export default function Player() {
   const [isForcedHidden, setIsForcedHidden] = useState(false);
   useEffect(() => {
     const handleToggle = (e: any) => setIsForcedHidden(e.detail);
+    // НОВЫЙ СЛУШАТЕЛЬ: Ловим событие перемотки из караоке
+    const handleSeek = (e: any) => {
+      if (audioRef.current) {
+        audioRef.current.currentTime = e.detail;
+      }
+    };
+
     window.addEventListener('toggle-player', handleToggle);
-    return () => window.removeEventListener('toggle-player', handleToggle);
+    window.addEventListener('seek-to-time', handleSeek);
+
+    return () => {
+      window.removeEventListener('toggle-player', handleToggle);
+      window.removeEventListener('seek-to-time', handleSeek);
+    };
   }, []);
 
   const isMultiTrack = activeTrack?.release_type === 'album' || activeTrack?.release_type === 'ep';
@@ -212,7 +228,13 @@ export default function Player() {
   const displayDuration = duration || activeTrack?.duration || 0;
 
   return (
-    <div className={`fixed bottom-0 left-0 right-0 h-24 px-6 flex items-center justify-between z-40 transition-all duration-500 ease-in-out overflow-visible bg-zinc-950/80 backdrop-blur-2xl backdrop-saturate-150 border-t border-white/10 shadow-[0_-15px_40px_rgba(0,0,0,0.6)] ${isForcedHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
+    <div className={`fixed bottom-0 left-0 right-0 h-24 px-6 flex items-center justify-between z-40 transition-all duration-500 ease-in-out overflow-visible backdrop-blur-2xl backdrop-saturate-150 border-t shadow-[0_-15px_40px_rgba(0,0,0,0.6)] ${isForcedHidden ? 'translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+      } ${activeTrack?.is_ecosystem
+        ? 'bg-[#081511]/90 border-emerald-500/20 shadow-[0_-15px_40px_rgba(16,185,129,0.05)]'
+        : activeTrack?.is_hot
+          ? 'bg-[#150808]/90 border-red-500/20 shadow-[0_-15px_40px_rgba(239,68,68,0.05)]'
+          : 'bg-zinc-950/80 border-white/10'
+      }`}>
 
       {/* Скрытый тег для моментальной предзагрузки следующей песни */}
       {nextTrack?.audio_url && (
@@ -265,10 +287,13 @@ export default function Player() {
           <div className="flex items-center gap-2 truncate">
             <span className="text-sm font-bold text-white truncate">{activeTrack?.title}</span>
             {activeTrack?.is_ecosystem && (
-              <span className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399,0_0_4px_#34d399]" />
+              <span className="text-[8px] font-black px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.15)] flex-shrink-0">
+                SINGLE
+              </span>
             )}
             {activeTrack?.is_hot && (
-              <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest bg-red-500/20 text-red-400 border border-red-500/30 shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+              <span className="flex items-center gap-1 text-[8px] font-black px-1.5 py-0.5 bg-red-500/10 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-hot-glow flex-shrink-0">
+                <Flame size={10} className="fill-red-400" />
                 HOT
               </span>
             )}

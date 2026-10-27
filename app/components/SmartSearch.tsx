@@ -12,6 +12,30 @@ interface SmartSearchProps {
     onReleaseClick: (release: any) => void
 }
 
+// Функция для безопасной подсветки текста (ч/б стиль)
+const HighlightText = ({ text, query }: { text: string; query: string }) => {
+    if (!query.trim()) return <>{text}</>;
+
+    // Экранируем спецсимволы, чтобы поиск не сломался
+    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const parts = text.split(new RegExp(`(${escapedQuery})`, 'gi'));
+
+    return (
+        <>
+            {parts.map((part, i) =>
+                part.toLowerCase() === query.toLowerCase() ? (
+                    // Вот тут настраиваем стиль подсветки (сделаем белый фон и черный текст для брутального контраста)
+                    <span key={i} className="bg-white/20 text-white px-0.5 rounded-[2px] font-black shadow-[0_0_8px_rgba(255,255,255,0.15)]">
+                        {part}
+                    </span>
+                ) : (
+                    <span key={i}>{part}</span>
+                )
+            )}
+        </>
+    );
+};
+
 export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSearchProps) {
     const [tracks, setTracks] = useState<any[]>([])
     const [releases, setReleases] = useState<any[]>([])
@@ -22,6 +46,7 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
     const setQueue = usePlayer((state) => state.setQueue)
     const setIsPlaying = usePlayer((state) => state.setIsPlaying)
     const language = usePlayer((state) => state.language)
+    const [latestReleaseId, setLatestReleaseId] = useState<number | null>(null);
     const t = locales[language as 'ru' | 'en'] || locales.ru
 
     useEffect(() => {
@@ -36,6 +61,15 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
             const cleanQuery = externalQuery.trim()
 
             try {
+                // Получаем ID самого свежего релиза глобально
+                const { data: latestData } = await supabase
+                    .from('releases')
+                    .select('id')
+                    .order('id', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                if (latestData) setLatestReleaseId(latestData.id);
+
                 // 1. Запрашиваем ТОЛЬКО существующие колонки у релизов
                 const { data: allReleases } = await supabase
                     .from('releases')
@@ -45,14 +79,14 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                 const { data: trackData } = await supabase
                     .from('tracks')
                     .select('*')
-                    .ilike('title', `${cleanQuery}%`)
+                    .ilike('title', `%${cleanQuery}%`)
                     .limit(10)
 
                 // 3. Ищем релизы
                 const { data: releaseData } = await supabase
                     .from('releases')
                     .select('*')
-                    .ilike('title', `${cleanQuery}%`)
+                    .ilike('title', `%${cleanQuery}%`)
                     .limit(6)
 
                 // 4. Привязываем обложку к треку из родительского релиза по release_id
@@ -66,6 +100,7 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                             ...track,
                             cover_url: matchedRelease?.cover_url || null,
                         }
+
                     }) || []
 
                 setTracks(formattedTracks)
@@ -75,6 +110,7 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
             } finally {
                 setIsLoading(false)
             }
+
         }
 
         const delayDebounce = setTimeout(() => {
@@ -106,7 +142,7 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {tracks.map((track) => (
-                                <SearchTrackRow key={track.id} track={track} allTracks={tracks} />
+                                <SearchTrackRow key={track.id} track={track} allTracks={tracks} query={externalQuery} />
                             ))}
                         </div>
                     </div>
@@ -163,64 +199,83 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                                     if (releaseTracks && releaseTracks.length > 0) {
                                         const prepared = releaseTracks.map((t) => ({
                                             ...t,
+                                            release_id: release.id, // <--- ДОБАВИЛИ СЮДА
+                                            release_title: release.title,
                                             cover_url: t.cover_url || t.image_url || coverUrl,
                                         }))
                                         setQueue(prepared, 0)
                                         setIsPlaying(true)
                                     } else {
-                                        setQueue([{ ...release, cover_url: coverUrl }], 0)
+                                        // Если треков не нашли, запускаем сам релиз как трек
+                                        setQueue([{
+                                            ...release,
+                                            cover_url: coverUrl,
+                                            release_id: release.id // <--- ДОБАВИЛИ СЮДА
+                                        }], 0)
                                         setIsPlaying(true)
                                     }
                                 }
 
-                                const isEcosystem = release.is_ecosystem
-                                const isHot = release.is_hot
+                                const isEcosystem = false;
+                                // Маркер NEW только если ID совпадает с самым свежим релизом в базе
+                                const isHot = release.id === latestReleaseId;
 
                                 return (
                                     <div
                                         key={release.id}
                                         onClick={async () => {
-                                            // Ищем треки строго по числовому id релиза или через промежуточную таблицу связей
-                                            let { data: fetchedTracks } = await supabase
-                                                .from('tracks')
-                                                .select('*')
+                                            // 1. Сначала получаем полный список треков из связующей таблицы
+                                            const { data: relTracksData } = await supabase
+                                                .from('release_tracks')
+                                                .select('track_number, tracks(*)')
                                                 .eq('release_id', release.id)
-                                                .order('position', { ascending: true })
+                                                .order('track_number', { ascending: true });
 
-                                            // Если напрямую по release_id не нашли, ищем через связующую таблицу release_tracks
-                                            if (!fetchedTracks || fetchedTracks.length === 0) {
-                                                const { data: relLinks } = await supabase
-                                                    .from('release_tracks')
-                                                    .select('track_id')
+                                            let finalTracks = [];
+
+                                            if (relTracksData && relTracksData.length > 0) {
+                                                // Если нашли в связующей таблице — мапим и обогащаем
+                                                finalTracks = relTracksData
+                                                    .filter((item: any) => item.tracks)
+                                                    .map((item: any) => ({
+                                                        ...item.tracks,
+                                                        cover_url: item.tracks.cover_url || release.cover_url,
+                                                        release_title: release.title,
+                                                        release_id: release.id
+                                                    }));
+                                            } else {
+                                                // Если пусто — делаем запасной запрос напрямую в tracks по release_id
+                                                const { data: directTracks } = await supabase
+                                                    .from('tracks')
+                                                    .select('*')
                                                     .eq('release_id', release.id)
+                                                    .order('position', { ascending: true });
 
-                                                if (relLinks && relLinks.length > 0) {
-                                                    const trackIds = relLinks.map((l) => l.track_id)
-                                                    const { data: linkedTracks } = await supabase
-                                                        .from('tracks')
-                                                        .select('*')
-                                                        .in('id', trackIds)
-                                                        .order('position', { ascending: true })
-
-                                                    fetchedTracks = linkedTracks
+                                                if (directTracks && directTracks.length > 0) {
+                                                    finalTracks = directTracks.map(t => ({
+                                                        ...t,
+                                                        cover_url: t.cover_url || release.cover_url,
+                                                        release_title: release.title
+                                                    }));
                                                 }
                                             }
 
+                                            // 2. Открываем модалку с ПОЛНЫМ списком треков
                                             onReleaseClick({
                                                 ...release,
-                                                tracks: fetchedTracks && fetchedTracks.length > 0 ? fetchedTracks : release.tracks || []
-                                            })
+                                                tracks: finalTracks.length > 0 ? finalTracks : release.tracks || []
+                                            });
                                         }}
-                                        className={`p-4 rounded-xl cursor-pointer transition-all duration-500 group border flex flex-col h-full ${isCurrentRelease
+                                        className={`p-4 rounded-xl cursor-pointer transition-all duration-300 ease-in-out group border flex flex-col h-full ${isCurrentRelease
                                             ? isEcosystem
                                                 ? 'bg-emerald-950/20 border-emerald-400 text-white shadow-[0_0_25px_rgba(52,211,153,0.35),inset_0_0_15px_rgba(52,211,153,0.15)] scale-[1.02]'
                                                 : isHot
-                                                    ? 'bg-red-950/20 border-red-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.35),inset_0_0_15px_rgba(239,68,68,0.15)] scale-[1.02]'
+                                                    ? 'bg-cyan-950/20 border-cyan-300 text-white shadow-[0_0_25px_rgba(34,211,238,0.3),inset_0_0_15px_rgba(34,211,238,0.15)] scale-[1.02]' // Активен
                                                     : 'bg-zinc-800/20 border-white text-white shadow-[0_0_25px_rgba(255,255,255,0.2),inset_0_0_15px_rgba(255,255,255,0.05)] scale-[1.02]'
                                             : isEcosystem
-                                                ? 'bg-zinc-900/30 border-emerald-500/20 text-zinc-400 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)] hover:text-white'
+                                                ? 'bg-zinc-900/30 border-emerald-500/40 text-zinc-400 hover:border-emerald-400 hover:shadow-[0_0_20px_rgba(52,211,153,0.2)] hover:text-white'
                                                 : isHot
-                                                    ? 'bg-zinc-900/30 border-red-500/20 text-zinc-400 hover:border-red-400 hover:text-white'
+                                                    ? 'bg-zinc-900/30 border-cyan-500/30 text-zinc-400 hover:border-cyan-400/60 hover:shadow-[0_0_15px_rgba(34,211,238,0.1)] hover:text-white' // Пассив и Ховер
                                                     : 'bg-zinc-900/30 border-zinc-800/80 text-zinc-400 hover:bg-zinc-800/30 hover:border-zinc-700 hover:text-white'
                                             }`}
                                     >
@@ -253,10 +308,9 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
 
                                         {/* Перенос названия до 3 строк без срезки и с сохранением исходного регистра */}
                                         <h4
-                                            className={`text-xs font-bold leading-snug line-clamp-3 break-words whitespace-normal transition-colors duration-300 ${isCurrentRelease ? 'text-white' : 'text-zinc-300 group-hover:text-white'
-                                                }`}
+                                            className={`text-xs font-bold leading-snug line-clamp-3 break-words whitespace-normal transition-colors duration-300 ${isCurrentRelease ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}
                                         >
-                                            {release.title}
+                                            <HighlightText text={release.title} query={externalQuery} />
                                         </h4>
 
                                         <div className="flex flex-wrap items-center gap-2 mt-auto pt-2">
@@ -269,11 +323,13 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
                                                     : ''}
                                             </p>
                                             {isEcosystem && (
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399,0_0_4px_#34d399]" />
+                                                <span className="text-[8px] font-black px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.15)] flex-shrink-0">
+                                                    SINGLE
+                                                </span>
                                             )}
                                             {isHot && (
-                                                <span className="text-[8px] font-black px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/40 rounded-sm tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.2)]">
-                                                    HOT
+                                                <span className="text-[8px] font-black px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 rounded-sm tracking-wider shadow-[0_0_10px_rgba(34,211,238,0.15)] flex-shrink-0">
+                                                    NEW
                                                 </span>
                                             )}
                                         </div>

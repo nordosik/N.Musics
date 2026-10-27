@@ -18,11 +18,19 @@ export default function ArtistModal() {
   // 1. БЛОКИРОВКА СКРОЛЛА ГЛАВНОЙ СТРАНИЦЫ
   useEffect(() => {
     if (isArtistModalOpen) {
-      document.body.style.overflow = 'hidden'
+      // Жестко блокируем скролл у корневых элементов
+      document.documentElement.style.overflow = 'hidden'
+      document.body.style.setProperty('overflow', 'hidden', 'important')
     } else {
-      document.body.style.overflow = 'unset'
+      // Возвращаем как было
+      document.documentElement.style.overflow = ''
+      document.body.style.removeProperty('overflow')
     }
-    return () => { document.body.style.overflow = 'unset' }
+
+    return () => {
+      document.documentElement.style.overflow = ''
+      document.body.style.removeProperty('overflow')
+    }
   }, [isArtistModalOpen])
 
   // 2. УМНЫЙ ЗАПРОС К БАЗЕ ДАННЫХ

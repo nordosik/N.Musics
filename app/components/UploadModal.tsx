@@ -45,6 +45,34 @@ export default function UploadModal() {
     })
   }
 
+  // НОВАЯ ФУНКЦИЯ: Ищет артиста по имени или создаёт нового, возвращает его ID
+  const getOrCreateArtistId = async (artistName: string): Promise<number | null> => {
+    const cleanName = artistName.trim();
+    if (!cleanName || cleanName.toUpperCase() === 'NORDOSIK') return null; // Главного артиста не создаём, он уже есть
+
+    // Ищем артиста (без учета регистра)
+    const { data: existing } = await supabase
+      .from('artists')
+      .select('id')
+      .ilike('name', cleanName)
+      .maybeSingle();
+
+    if (existing) return existing.id;
+
+    // Если нет — создаём
+    const { data: newArtist, error } = await supabase
+      .from('artists')
+      .insert([{ name: cleanName }])
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Ошибка при создании артиста:", error);
+      return null;
+    }
+    return newArtist.id;
+  };
+
   const releaseType = useMemo(() => {
     const validTracks = tracks.filter(t => t.file !== null)
     const trackCount = validTracks.length
@@ -58,18 +86,6 @@ export default function UploadModal() {
     if (trackCount >= 1 && trackCount <= 3 && hasLongTrack && totalDurationMin <= 30) return 'ep'
     return 'single'
   }, [tracks])
-
-  const ensureArtistsExist = async (artistNamesStr: string) => {
-    if (!artistNamesStr) return
-    const names = artistNamesStr.split(',').map(n => n.trim()).filter(n => n.length > 0)
-    for (const name of names) {
-      if (name.toUpperCase() === 'NORDOSIK') continue
-      const { data } = await supabase.from('artists').select('id').ilike('name', name).maybeSingle()
-      if (!data) {
-        await supabase.from('artists').insert([{ name }])
-      }
-    }
-  }
 
   const handleUpload = async () => {
     // 1. Проверяем, что заполнено название релиза
@@ -95,13 +111,7 @@ export default function UploadModal() {
         coverUrl = supabase.storage.from('media').getPublicUrl(coverPath).data.publicUrl
       }
 
-      // 4. Проверка и добавление артистов
-      await ensureArtistsExist(releaseCollaborators)
-      for (const tr of filledTracks) {
-        await ensureArtistsExist(tr.collaborators)
-      }
-
-      // 5. Загрузка аудиофайлов во временный массив
+      // 4. Загрузка аудиофайлов во временный массив
       let uploadedTracksInfo = []
       for (const [index, t] of filledTracks.entries()) {
         if (!t.file) continue
@@ -122,7 +132,7 @@ export default function UploadModal() {
       const totalDurationSec = uploadedTracksInfo.reduce((sum, t) => sum + t.duration, 0)
       const finalAudioUrl = uploadedTracksInfo.length === 1 ? uploadedTracksInfo[0].audio_url : null
 
-      // 6. Создаём запись в таблице releases (получаем ее ID!)
+      // 5. Создаём запись в таблице releases, СРАЗУ ПИШЕМ ПРАВИЛЬНОЕ КОЛИЧЕСТВО ТРЕКОВ
       const { data: newRelease, error: relError } = await supabase
         .from('releases')
         .insert([{
@@ -132,20 +142,36 @@ export default function UploadModal() {
           duration: totalDurationSec,
           cover_url: coverUrl,
           lyrics: lyrics,
-          release_type: releaseType
+          release_type: releaseType,
+          tracks_count: uploadedTracksInfo.length // <--- ИСПРАВЛЕНИЕ 1: Считаем треки сразу
         }])
         .select('id')
         .single()
 
       if (relError || !newRelease) throw relError || new Error('Не удалось создать релиз')
 
-      const newReleaseId = newRelease.id
+      const newReleaseId = newRelease.id // Вот наш ID релиза (например, 44)
+
+      // 6. Обрабатываем артистов РЕЛИЗА (создаём связи)
+      if (releaseCollaborators.trim()) {
+        const releaseArtistsList = releaseCollaborators.split(',').map(n => n.trim()).filter(Boolean);
+        for (const artistName of releaseArtistsList) {
+          const artistId = await getOrCreateArtistId(artistName);
+          if (artistId) {
+            await supabase.from('release_collaborators').insert([{
+              release_title: title,
+              artist_name: artistName,
+              role: 'featured'
+            }]);
+          }
+        }
+      }
 
       // 7. Поочередно связываем треки с релизом
       for (let index = 0; index < uploadedTracksInfo.length; index++) {
         const trackItem = uploadedTracksInfo[index];
 
-        // А) Проверяем, есть ли уже трек с таким названием в базе tracks
+        // А) Создаем новый трек (или ищем существующий по названию)
         const { data: existingTrack } = await supabase
           .from('tracks')
           .select('id')
@@ -154,7 +180,6 @@ export default function UploadModal() {
 
         let targetTrackId = existingTrack?.id;
 
-        // Б) Если трека еще нет в базе — создаем новый
         if (!targetTrackId) {
           const { data: insertedTrack, error: trackErr } = await supabase
             .from('tracks')
@@ -163,16 +188,20 @@ export default function UploadModal() {
               audio_url: trackItem.audio_url,
               duration: trackItem.duration,
               collaborators: trackItem.collaborators,
-              position: trackItem.position
+              position: trackItem.position,
+              release_id: newReleaseId // <--- ИСПРАВЛЕНИЕ 2: Привязываем трек к ID релиза!
             }])
             .select('id')
             .single();
 
           if (trackErr || !insertedTrack) throw trackErr || new Error(`Ошибка сохранения трека "${trackItem.title}"`);
           targetTrackId = insertedTrack.id;
+        } else {
+          // Если трек уже существует (мы его нашли), нам нужно обновить его release_id, чтобы он привязался к новому альбому
+          await supabase.from('tracks').update({ release_id: newReleaseId }).eq('id', targetTrackId);
         }
 
-        // В) Привязываем найденный (или созданный) track_id к новому релизу
+        // Б) Связываем трек с релизом в release_tracks
         const { error: relTrackErr } = await supabase
           .from('release_tracks')
           .insert([{
@@ -182,6 +211,21 @@ export default function UploadModal() {
           }]);
 
         if (relTrackErr) throw relTrackErr;
+
+        // В) Обрабатываем артистов ТРЕКА (создаём связи в track_collaborators)
+        if (trackItem.collaborators && trackItem.collaborators.trim()) {
+          const trackArtistsList = trackItem.collaborators.split(',').map(n => n.trim()).filter(Boolean);
+          for (const artistName of trackArtistsList) {
+            const artistId = await getOrCreateArtistId(artistName);
+            if (artistId) {
+              await supabase.from('track_collaborators').insert([{
+                track_id: targetTrackId,
+                artist_name: artistName,
+                role: 'featured'
+              }]);
+            }
+          }
+        }
       }
 
       setIsOpen(false)
