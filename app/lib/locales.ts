@@ -124,6 +124,10 @@ const ruTranslations = {
   artistModalGoTo: "ПЕРЕЙТИ",
   collaboratorsPlaceholder: "Коллабораторы (через запятую)...",
   artistsTooltip: "исполнители:",
+  scheduledReleases: "ЗАПЛАНИРОВАННЫЕ РЕЛИЗЫ",
+  publishDateLabel: "ДАТА ПУБЛИКАЦИИ (ОПЦИОНАЛЬНО)",
+  scheduledStatus: "ЗАПЛАНИРОВАНО",
+  released: "Вышел!",
 };
 
 // 2. Строгий тип на основе структуры русского словаря
@@ -255,6 +259,10 @@ const enTranslations: TranslationKeys = {
   artistModalGoTo: "GO TO",
   collaboratorsPlaceholder: "Collaborators (comma separated)...",
   artistsTooltip: "ARTISTS:",
+  scheduledReleases: "SCHEDULED RELEASES",
+  publishDateLabel: "PUBLISH DATE (OPTIONAL)",
+  scheduledStatus: "SCHEDULED",
+  released: "Released!",
 };
 
 export type Language = 'ru' | 'en';

@@ -308,7 +308,7 @@ export default function SmartSearch({ externalQuery, onReleaseClick }: SmartSear
 
                                         {/* Перенос названия до 3 строк без срезки и с сохранением исходного регистра */}
                                         <h4
-                                            className={`text-xs font-bold leading-snug line-clamp-3 break-words whitespace-normal transition-colors duration-300 ${isCurrentRelease ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}
+                                            className={`text-xs font-black tracking-wide truncate transition-colors duration-300 ${isCurrentRelease ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}
                                         >
                                             <HighlightText text={release.title} query={externalQuery} />
                                         </h4>

@@ -155,3 +155,39 @@ body.modal-open {
 .animate-hot-glow {
   animation: hotGlow 2.5s ease-in-out infinite;
 }
+
+@keyframes shimmerBg {
+  0% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+.animate-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.05) 40%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 60%,
+    transparent 80%
+  );
+  animation: shimmerBg 6s ease-in-out infinite;
+  pointer-events: none; /* Чтобы не мешать кликам */
+  z-index: 0;
+}

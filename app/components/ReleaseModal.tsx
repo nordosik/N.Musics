@@ -519,7 +519,7 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
                     {!release.release_type && t.single}
                   </span>
 
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-white uppercase leading-none mb-3 break-words w-full">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter text-white leading-none mb-3 break-words w-full">
                     {release.title}
                   </h1>
 

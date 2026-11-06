@@ -21,6 +21,8 @@ export default function UploadModal() {
   const [lyrics, setLyrics] = useState('')
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [isScheduledVisible, setIsScheduledVisible] = useState(false)
 
   const language = usePlayer(state => state.language)
   const $t = locales[language as 'ru' | 'en'] || locales.en
@@ -143,7 +145,9 @@ export default function UploadModal() {
           cover_url: coverUrl,
           lyrics: lyrics,
           release_type: releaseType,
-          tracks_count: uploadedTracksInfo.length // <--- ИСПРАВЛЕНИЕ 1: Считаем треки сразу
+          tracks_count: uploadedTracksInfo.length,
+          scheduled_at: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+          is_scheduled_visible: isScheduledVisible
         }])
         .select('id')
         .single()
@@ -418,6 +422,45 @@ export default function UploadModal() {
                     </span>
                     {coverFile ? <Check size={14} className="text-white" /> : <ImageIcon size={14} className="text-zinc-600" />}
                   </label>
+                </div>
+
+                {/* Планирование */}
+                <div className="space-y-2">
+                  <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400 ml-1">
+                    {$t.publishDateLabel}
+                  </label>
+
+                  {/* Кастомный инпут для даты */}
+                  <div className="relative">
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={e => setScheduledAt(e.target.value)}
+                      className="w-full bg-black border border-white/5 p-2.5 rounded-xl focus:border-white/20 outline-none transition text-xs font-bold tracking-tight text-white placeholder:text-zinc-600 appearance-none [&::-webkit-calendar-picker-indicator]:filter [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:opacity-50 hover:[&::-webkit-calendar-picker-indicator]:opacity-100 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Кастомный чекбокс */}
+                  {scheduledAt && (
+                    <label className="flex items-center gap-3 mt-2 cursor-pointer group px-1">
+                      <div className="relative flex items-center justify-center w-4 h-4 border border-white/20 rounded-sm bg-black group-hover:border-white/40 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={isScheduledVisible}
+                          onChange={(e) => setIsScheduledVisible(e.target.checked)}
+                          className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                        />
+                        {isScheduledVisible && (
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-white">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${isScheduledVisible ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'}`}>
+                        {language === 'ru' ? 'Показывать в плашке (прогрев)' : 'Show in banner (teaser)'}
+                      </span>
+                    </label>
+                  )}
                 </div>
 
                 {/* Кнопка публикации */}

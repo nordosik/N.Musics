@@ -13,6 +13,7 @@ import SmartSearch from './components/SmartSearch';
 import { useState, useEffect } from 'react';
 import { usePlayer } from './lib/usePlayer'; // ИМПОРТ 1: Подключаем стор
 import { locales } from './lib/locales';   // ИМПОРТ 2: Подключаем словарь
+import ScheduledReleaseBanner from './components/ScheduledReleaseBanner'
 
 function HomeContent() {
   const [releases, setReleases] = useState<any[]>([])
@@ -67,25 +68,29 @@ function HomeContent() {
   useEffect(() => {
     const fetchReleases = async () => {
       // 1. Запрашиваем релизы и подтягиваем связанную таблицу tracks с правильными колонками
+      const now = new Date().toISOString();
+
       const { data: releasesData, error } = await supabase
         .from('releases')
         .select(`
-    *,
-    release_tracks (
-      track_number,
-      tracks (
-        id,
-        title,
-        duration,
-        audio_url,
-        plays_count,
-        collaborators,
-        is_ecosystem,
-        is_hot,
-        lyrics
-      )
-    )
-  `)
+          *,
+          release_tracks (
+            track_number,
+            tracks (
+              id,
+              title,
+              duration,
+              audio_url,
+              plays_count,
+              collaborators,
+              is_ecosystem,
+              is_hot,
+              lyrics
+            )
+          )
+        `)
+        // Показываем релизы, у которых нет даты планирования ИЛИ дата уже прошла
+        .or(`scheduled_at.is.null,scheduled_at.lte.${now}`)
         .order('id', { ascending: false })
         .order('track_number', { foreignTable: 'release_tracks', ascending: true });
 
@@ -189,6 +194,8 @@ function HomeContent() {
       <Hero />
 
       <div className="px-8 mt-12 flex flex-col">
+        {/* ВОТ СЮДА ВСТАВЛЯЕМ ПЛАШКУ (она покажется, только если есть запланированные релизы) */}
+        <ScheduledReleaseBanner />
         <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-6">
             <h2 className="text-2xl font-bold tracking-tight">
