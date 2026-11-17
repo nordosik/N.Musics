@@ -316,6 +316,32 @@ export default function ReleaseModal({ release, isOpen, onClose, tracks: rawTrac
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleDownloadCover = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Чтобы клик не закрывал лайтбокс
+    if (!release.cover_url) return;
+
+    try {
+      // 1. Скачиваем картинку как Blob
+      const response = await fetch(release.cover_url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      // 2. Создаем временную ссылку для скачивания
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${release.title} - Cover.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // 3. Чистим за собой память
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Ошибка при скачивании обложки:", error);
+      alert(language === 'ru' ? 'Не удалось скачать обложку' : 'Failed to download cover');
+    }
+  };
+
   const handleSaveCommentary = async () => {
     if (!isAdmin) return
     setIsSaving(true)
@@ -919,24 +945,38 @@ border ${isNowPlaying
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsLightboxOpen(false)}
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-3xl cursor-zoom-out"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-3xl cursor-default"
           >
-            <button
-              onClick={() => setIsLightboxOpen(false)}
-              className="absolute top-8 right-8 text-zinc-500 hover:text-white transition-colors z-[110]"
-            >
-            </button>
+            {/* Контейнер для картинки и кнопки */}
+            <div className="relative flex items-center justify-center">
 
-            <motion.img
-              initial={{ scale: 0.95, y: 10 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 10 }}
-              transition={{ type: "spring", duration: 0.4 }}
-              src={release.cover_url || '/default.png'}
-              alt={release.title}
-              className="max-w-[90vw] max-h-[85vh] md:max-w-[70vw] lg:max-w-[50vw] aspect-square object-contain rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.8)] select-none border border-white/5"
-              onClick={(e) => e.stopPropagation()}
-            />
+              {/* КОМПАКТНАЯ КНОПКА СКАЧИВАНИЯ (ПОЧТИ ВПЛОТНУЮ К ОБЛОЖКЕ) */}
+              <motion.button
+                onClick={handleDownloadCover}
+                initial={{ backgroundColor: "rgba(255,255,255,0.1)" }} // Явно задаем стартовый цвет
+                whileHover={{ scale: 1.05, backgroundColor: "rgba(255,255,255,0.25)" }} // Цвет при наведении
+                whileTap={{ scale: 0.95, backgroundColor: "rgba(255,255,255,0.15)" }} // Цвет при нажатии
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="absolute -left-14 md:-left-16 z-[130] p-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full backdrop-blur-md text-white cursor-pointer"
+                title={t.downloadBtn || 'Скачать обложку'}
+              >
+                <Download size={20} strokeWidth={2.5} /> {/* Уменьшили иконку */}
+              </motion.button>
+
+              {/* ОБЛОЖКА (ЗАПРЕТ ПЕРЕТАСКИВАНИЯ) */}
+              <motion.img
+                initial={{ scale: 0.95, y: 10 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 10 }}
+                transition={{ type: "spring", duration: 0.4 }}
+                src={release.cover_url || '/default.png'}
+                alt={release.title}
+                draggable={false} // <--- ЗАПРЕТ ПЕРЕТАСКИВАНИЯ
+                onDragStart={(e) => e.preventDefault()} // <--- ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА
+                className="max-w-[90vw] max-h-[85vh] md:max-w-[70vw] lg:max-w-[50vw] aspect-square object-contain rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.8)] select-none border border-white/5 cursor-default"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

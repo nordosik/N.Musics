@@ -1,6 +1,6 @@
 'use client'
 
-import { Play, SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal, Shuffle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -11,8 +11,8 @@ import TrackItem from './components/TrackItem';
 import Hero from './components/Hero';
 import SmartSearch from './components/SmartSearch';
 import { useState, useEffect } from 'react';
-import { usePlayer } from './lib/usePlayer'; // ИМПОРТ 1: Подключаем стор
-import { locales } from './lib/locales';   // ИМПОРТ 2: Подключаем словарь
+import { usePlayer } from './lib/usePlayer';
+import { locales } from './lib/locales';
 import ScheduledReleaseBanner from './components/ScheduledReleaseBanner'
 
 function HomeContent() {
@@ -38,9 +38,13 @@ function HomeContent() {
   const language = usePlayer(state => state.language);
   const t = locales[language as 'ru' | 'en' || 'en'];
 
-  // НАШИ НОВЫЕ СТРОЧКИ ДЛЯ ВЕРХНЕЙ ПАНЕЛИ
+  // НОВЫЕ СТРОЧКИ ДЛЯ ВЕРХНЕЙ ПАНЕЛИ
   const isTopPanelOpen = usePlayer(state => state.isTopPanelOpen);
   const setIsTopPanelOpen = usePlayer(state => state.setIsTopPanelOpen);
+
+  const setQueue = usePlayer(state => state.setQueue);
+  const setIsPlaying = usePlayer(state => state.setIsPlaying);
+  const [isRandomizing, setIsRandomizing] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -99,6 +103,28 @@ function HomeContent() {
         return;
       }
 
+      // АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ДАТЫ
+      const currentNow = new Date();
+      const releasesToUpdate = releasesData.filter((release: any) => {
+        if (!release.scheduled_at) return false;
+        const scheduledDate = new Date(release.scheduled_at);
+        const createdDate = new Date(release.created_at);
+        return scheduledDate <= currentNow && createdDate < scheduledDate;
+      });
+
+      if (releasesToUpdate.length > 0) {
+        for (const release of releasesToUpdate) {
+          // Обновляем в базе (вызовет триггер, если он есть)
+          await supabase
+            .from('releases')
+            .update({ created_at: release.scheduled_at })
+            .eq('id', release.id);
+          
+          // Обновляем в локальном стейте, чтобы на странице сразу было правильно
+          release.created_at = release.scheduled_at;
+        }
+      }
+
       // 2. Преобразуем структуру: достаем треки из release_tracks и привязываем обложку от релиза
       const enrichedReleases = releasesData.map((release: any) => {
         const sortedTracks = (release.release_tracks || [])
@@ -131,6 +157,31 @@ function HomeContent() {
   useEffect(() => {
     document.body.classList.toggle('modal-open', isModalOpen);
   }, [isModalOpen]);
+
+  const handleRandomPlay = () => {
+    if (releases.length === 0) return;
+
+    const allTracks = releases.flatMap(release => release.tracks || []);
+    if (allTracks.length === 0) return;
+
+    const randomIndex = Math.floor(Math.random() * allTracks.length);
+    const randomTrack = allTracks[randomIndex];
+
+    const trackWithContext = {
+      ...randomTrack,
+      release_id: randomTrack.release_id || releases.find(r => r.tracks?.some((t: any) => t.id === randomTrack.id))?.id
+    };
+
+    // 1. Принудительно останавливаем плеер
+    setIsPlaying(false);
+
+    // 2. Ждем долю секунды, чтобы React обновил состояние
+    setTimeout(() => {
+      // 3. Ставим трек и запускаем
+      setQueue([trackWithContext], 0);
+      setIsPlaying(true);
+    }, 50); // 50мс — достаточно, чтобы React "проглотил" паузу
+  };
 
   const handleOpenRelease = (release: any) => {
     if (isModalOpen && selectedRelease?.id === release.id) {
@@ -197,7 +248,7 @@ function HomeContent() {
         {/* ВОТ СЮДА ВСТАВЛЯЕМ ПЛАШКУ (она покажется, только если есть запланированные релизы) */}
         <ScheduledReleaseBanner />
         <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             <h2 className="text-2xl font-bold tracking-tight">
               {!isMounted
                 ? (isSearching ? "Search Results" : "Recent Releases")
@@ -221,6 +272,28 @@ function HomeContent() {
                 <span>{isFilterPanelOpen ? (t.close || "ЗАКРЫТЬ") : (t.filters || "ФИЛЬТРЫ")}</span>
               </motion.button>
             )}
+
+            <motion.button
+              whileHover={{
+                scale: 1.02,
+                backgroundColor: "#27272a", // Темно-серый, как у фильтров при наведении
+                borderColor: "#52525b",
+                color: "#ffffff"
+              }}
+              whileTap={{
+                scale: 0.98,
+                backgroundColor: "#ffffff", // Белая вспышка при клике
+                color: "#000000",
+                borderColor: "#ffffff"
+              }}
+              transition={{ duration: 0.15 }}
+              onClick={handleRandomPlay}
+              className="flex items-center gap-2 h-10 px-5 border font-mono text-xs font-bold tracking-wider rounded-full bg-zinc-900/50 text-zinc-400 border-zinc-800 transition-colors"
+              title={t.randomPlay || "СЛУЧАЙНЫЙ ТРЕК"}
+            >
+              <Shuffle size={14} />
+              <span>{t.randomPlay || "УДАЧА"}</span>
+            </motion.button>
           </div>
 
           <div className="flex items-center gap-4">

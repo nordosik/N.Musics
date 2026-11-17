@@ -128,6 +128,8 @@ const ruTranslations = {
   publishDateLabel: "ДАТА ПУБЛИКАЦИИ (ОПЦИОНАЛЬНО)",
   scheduledStatus: "ЗАПЛАНИРОВАНО",
   released: "Вышел!",
+  casinoTitle: "КАЗИНО",
+  randomPlay: "УДАЧА",
 };
 
 // 2. Строгий тип на основе структуры русского словаря
@@ -263,6 +265,8 @@ const enTranslations: TranslationKeys = {
   publishDateLabel: "PUBLISH DATE (OPTIONAL)",
   scheduledStatus: "SCHEDULED",
   released: "Released!",
+  casinoTitle: "CASINO",
+  randomPlay: "LUCKY",
 };
 
 export type Language = 'ru' | 'en';

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { User2, Send, Tv, MessageSquare, Mail, Copy, Check, X } from 'lucide-react'
+import { User2, Send, Tv, MessageSquare, Mail, Copy, Check } from 'lucide-react'
 import { usePlayer } from '../lib/usePlayer'
 import { locales } from '../lib/locales'
 
@@ -66,6 +66,7 @@ export default function TopPanel() {
   const isOpen = usePlayer(state => state.isTopPanelOpen)
   const setIsOpen = usePlayer(state => state.setIsTopPanelOpen)
   const language = usePlayer(state => state.language)
+  const [isCasinoOpen, setIsCasinoOpen] = useState(false)
   const t = locales[language as 'ru' | 'en' || 'en']
 
   // Контроль открытых окон
