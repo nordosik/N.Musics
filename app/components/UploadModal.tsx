@@ -5,6 +5,8 @@ import { X, Plus, Image as ImageIcon, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePlayer } from '../lib/usePlayer'
 import { locales } from '../lib/locales'
+import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { obsideoClient } from '../lib/obsideo'
 
 interface UploadTrack {
   id: string
@@ -47,12 +49,10 @@ export default function UploadModal() {
     })
   }
 
-  // НОВАЯ ФУНКЦИЯ: Ищет артиста по имени или создаёт нового, возвращает его ID
   const getOrCreateArtistId = async (artistName: string): Promise<number | null> => {
     const cleanName = artistName.trim();
-    if (!cleanName || cleanName.toUpperCase() === 'NORDOSIK') return null; // Главного артиста не создаём, он уже есть
+    if (!cleanName || cleanName.toUpperCase() === 'NORDOSIK') return null;
 
-    // Ищем артиста (без учета регистра)
     const { data: existing } = await supabase
       .from('artists')
       .select('id')
@@ -61,7 +61,6 @@ export default function UploadModal() {
 
     if (existing) return existing.id;
 
-    // Если нет — создаём
     const { data: newArtist, error } = await supabase
       .from('artists')
       .insert([{ name: cleanName }])
@@ -90,41 +89,47 @@ export default function UploadModal() {
   }, [tracks])
 
   const handleUpload = async () => {
-    // 1. Проверяем, что заполнено название релиза
-    if (!title.trim()) {
-      return alert($t.errSpecifyTitle)
-    }
-
-    // 2. Проверяем, что у всех добавленных треков есть файлы и названия
+    if (!title.trim()) return alert($t.errSpecifyTitle)
     const invalidTrack = tracks.find(t => !t.title.trim() || !t.file)
-    if (invalidTrack) {
-      return alert($t.errFillAllTracks)
-    }
+    if (invalidTrack) return alert($t.errFillAllTracks)
 
     const filledTracks = tracks
     setLoading(true)
 
     try {
-      // 3. Загрузка обложки
+      // 3. Загрузка обложки в Obsideo
       let coverUrl = null
       if (coverFile) {
-        const coverPath = `covers/${Date.now()}_${coverFile.name.replace(/[^a-z0-9.]/gi, '_')}`
-        await supabase.storage.from('media').upload(coverPath, coverFile)
-        coverUrl = supabase.storage.from('media').getPublicUrl(coverPath).data.publicUrl
+        const coverKey = `covers/${Date.now()}_${coverFile.name.replace(/[^a-z0-9.]/gi, '_')}`;
+        const formData = new FormData();
+        formData.append('file', coverFile);
+        formData.append('key', coverKey);
+
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Cover upload failed');
+
+        coverUrl = `/api/media?key=${encodeURIComponent(coverKey)}`;
       }
 
-      // 4. Загрузка аудиофайлов во временный массив
+      // 4. Загрузка аудиофайлов через API-роут
       let uploadedTracksInfo = []
       for (const [index, t] of filledTracks.entries()) {
-        if (!t.file) continue
-        const duration = t.duration || await getDuration(t.file)
-        const tPath = `tracks/${Date.now()}_${t.file.name.replace(/[^a-z0-9.]/gi, '_')}`
-        await supabase.storage.from('media').upload(tPath, t.file)
-        const { data: { publicUrl: tUrl } } = supabase.storage.from('media').getPublicUrl(tPath)
+        if (!t.file) continue;
+
+        // Вычисляем длительность (если еще не вычислена)
+        const duration = t.duration || await getDuration(t.file);
+
+        const trackKey = `tracks/${Date.now()}_${t.file.name.replace(/[^a-z0-9.]/gi, '_')}`;
+        const formData = new FormData();
+        formData.append('file', t.file);
+        formData.append('key', trackKey);
+
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error(`Track "${t.title}" upload failed`);
 
         uploadedTracksInfo.push({
           title: t.title,
-          audio_url: tUrl,
+          audio_url: `/api/media?key=${encodeURIComponent(trackKey)}`,
           position: index + 1,
           duration: duration,
           collaborators: t.collaborators || null
@@ -134,7 +139,7 @@ export default function UploadModal() {
       const totalDurationSec = uploadedTracksInfo.reduce((sum, t) => sum + t.duration, 0)
       const finalAudioUrl = uploadedTracksInfo.length === 1 ? uploadedTracksInfo[0].audio_url : null
 
-      // 5. Создаём запись в таблице releases, СРАЗУ ПИШЕМ ПРАВИЛЬНОЕ КОЛИЧЕСТВО ТРЕКОВ
+      // 5. Создаём запись в таблице releases (Supabase)
       const { data: newRelease, error: relError } = await supabase
         .from('releases')
         .insert([{
@@ -153,10 +158,9 @@ export default function UploadModal() {
         .single()
 
       if (relError || !newRelease) throw relError || new Error('Не удалось создать релиз')
+      const newReleaseId = newRelease.id
 
-      const newReleaseId = newRelease.id // Вот наш ID релиза (например, 44)
-
-      // 6. Обрабатываем артистов РЕЛИЗА (создаём связи)
+      // 6. Артисты релиза
       if (releaseCollaborators.trim()) {
         const releaseArtistsList = releaseCollaborators.split(',').map(n => n.trim()).filter(Boolean);
         for (const artistName of releaseArtistsList) {
@@ -171,11 +175,10 @@ export default function UploadModal() {
         }
       }
 
-      // 7. Поочередно связываем треки с релизом
+      // 7. Связываем треки с релизом
       for (let index = 0; index < uploadedTracksInfo.length; index++) {
         const trackItem = uploadedTracksInfo[index];
 
-        // А) Создаем новый трек (или ищем существующий по названию)
         const { data: existingTrack } = await supabase
           .from('tracks')
           .select('id')
@@ -193,7 +196,7 @@ export default function UploadModal() {
               duration: trackItem.duration,
               collaborators: trackItem.collaborators,
               position: trackItem.position,
-              release_id: newReleaseId // <--- ИСПРАВЛЕНИЕ 2: Привязываем трек к ID релиза!
+              release_id: newReleaseId
             }])
             .select('id')
             .single();
@@ -201,11 +204,9 @@ export default function UploadModal() {
           if (trackErr || !insertedTrack) throw trackErr || new Error(`Ошибка сохранения трека "${trackItem.title}"`);
           targetTrackId = insertedTrack.id;
         } else {
-          // Если трек уже существует (мы его нашли), нам нужно обновить его release_id, чтобы он привязался к новому альбому
           await supabase.from('tracks').update({ release_id: newReleaseId }).eq('id', targetTrackId);
         }
 
-        // Б) Связываем трек с релизом в release_tracks
         const { error: relTrackErr } = await supabase
           .from('release_tracks')
           .insert([{
@@ -216,7 +217,6 @@ export default function UploadModal() {
 
         if (relTrackErr) throw relTrackErr;
 
-        // В) Обрабатываем артистов ТРЕКА (создаём связи в track_collaborators)
         if (trackItem.collaborators && trackItem.collaborators.trim()) {
           const trackArtistsList = trackItem.collaborators.split(',').map(n => n.trim()).filter(Boolean);
           for (const artistName of trackArtistsList) {
@@ -281,7 +281,6 @@ export default function UploadModal() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className="relative w-full max-w-[420px] max-h-[92vh] bg-[#0c0c0c] border border-white/10 p-5 rounded-2xl shadow-2xl flex flex-col justify-between overflow-hidden z-10"
             >
-              {/* Крестик */}
               <motion.button
                 onClick={() => setIsOpen(false)}
                 whileHover={{ scale: 1.2, rotate: 90, color: "#ef4444" }}
@@ -296,7 +295,6 @@ export default function UploadModal() {
               </h2>
 
               <div className="space-y-3.5 overflow-y-auto pr-1 custom-scrollbar max-h-[calc(92vh-110px)]">
-                {/* Формат релиза */}
                 <div className="flex bg-black p-2.5 rounded-xl border border-white/5 items-center justify-between">
                   <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400">
                     {$t.detectedType || "DETECTED TYPE:"}
@@ -308,7 +306,6 @@ export default function UploadModal() {
                   </span>
                 </div>
 
-                {/* Название релиза */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400 ml-1">
                     {$t.releaseTitleLabel}
@@ -322,7 +319,6 @@ export default function UploadModal() {
                   />
                 </div>
 
-                {/* Артисты релиза */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400 ml-1">
                     {$t.releaseArtistsLabel}
@@ -336,7 +332,6 @@ export default function UploadModal() {
                   />
                 </div>
 
-                {/* Треклист */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400 ml-1">
                     {$t.tracksLabel}
@@ -410,7 +405,6 @@ export default function UploadModal() {
                   </div>
                 </div>
 
-                {/* Обложка */}
                 <div className="space-y-1">
                   <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400 ml-1">
                     {$t.coverImageLabel}
@@ -424,13 +418,11 @@ export default function UploadModal() {
                   </label>
                 </div>
 
-                {/* Планирование */}
                 <div className="space-y-2">
                   <label className="text-[11px] font-black uppercase tracking-wider text-zinc-400 ml-1">
                     {$t.publishDateLabel}
                   </label>
 
-                  {/* Кастомный инпут для даты */}
                   <div className="relative">
                     <input
                       type="datetime-local"
@@ -440,7 +432,6 @@ export default function UploadModal() {
                     />
                   </div>
 
-                  {/* Кастомный чекбокс */}
                   {scheduledAt && (
                     <label className="flex items-center gap-3 mt-2 cursor-pointer group px-1">
                       <div className="relative flex items-center justify-center w-4 h-4 border border-white/20 rounded-sm bg-black group-hover:border-white/40 transition-colors">
@@ -463,7 +454,6 @@ export default function UploadModal() {
                   )}
                 </div>
 
-                {/* Кнопка публикации */}
                 <button
                   onClick={handleUpload}
                   disabled={loading}
